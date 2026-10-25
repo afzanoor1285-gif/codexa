@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+Ml/dataset/
+Ml/model.pkl
+Ml/vectorizer.pkl
