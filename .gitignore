@@ -1,6 +1,7 @@
 # Local secrets
 **/.env
-!.env.example
+**/.env.*
+!**/.env.example
 
 # Python environments and generated files
 .venv/

@@ -24,6 +24,8 @@ import AccountSettingsDialog from "@/components/AccountSettingsDialog";
 import { Input } from "@/components/ui/input";
 import { getUser, logout } from "@/lib/auth";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000";
+
 const TeacherDashboard = () => {
   const [user, setUser] = useState(getUser);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -56,7 +58,7 @@ const TeacherDashboard = () => {
       setLoading(true);
       setError(null);
       const token = localStorage.getItem("codexa_token");
-      fetch('http://127.0.0.1:5000/api/students', {
+      fetch(`${API_BASE_URL}/api/students`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then(res => res.json())
@@ -74,7 +76,7 @@ const TeacherDashboard = () => {
   useEffect(() => {
     // Fetch submissions on mount
     const token = localStorage.getItem("codexa_token");
-    fetch('http://127.0.0.1:5000/api/submissions', {
+    fetch(`${API_BASE_URL}/api/submissions`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => res.json())
@@ -90,7 +92,7 @@ const TeacherDashboard = () => {
     if (!newName || !newEmail) return;
     try {
       const token = localStorage.getItem("codexa_token");
-      const response = await fetch('http://127.0.0.1:5000/api/students', {
+      const response = await fetch(`${API_BASE_URL}/api/students`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,7 +105,7 @@ const TeacherDashboard = () => {
         setNewEmail('');
         // Refetch students
         setLoading(true);
-        fetch('http://127.0.0.1:5000/api/students', {
+        fetch(`${API_BASE_URL}/api/students`, {
           headers: { Authorization: `Bearer ${token}` },
         })
           .then(res => res.json())
