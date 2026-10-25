@@ -1,0 +1,132 @@
+import os
+import random
+
+# Paths
+ai_path = "dataset/ai/python"
+human_path = "dataset/human/python"
+
+# Ensure directories exist
+os.makedirs(ai_path, exist_ok=True)
+os.makedirs(human_path, exist_ok=True)
+
+# Different Problems
+def generate_problem(problem_id, style="ai"):
+
+    if problem_id == 1:
+        if style == "ai":
+            return """
+def solution(n):
+    \"\"\"Return factorial of a number.\"\"\"
+    if n == 0:
+        return 1
+    result = 1
+    for i in range(1, n + 1):
+        result *= i
+    return result
+"""
+        else:
+            return """
+def solution(n):
+    # factorial
+    f=1
+    for i in range(1,n+1):
+        f=f*i
+    return f
+"""
+
+    if problem_id == 2:
+        if style == "ai":
+            return """
+def solution(n):
+    \"\"\"Check if number is prime.\"\"\"
+    if n < 2:
+        return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+"""
+        else:
+            return """
+def solution(n):
+    if n<2:
+        return False
+    for i in range(2,n):
+        if n%i==0:
+            return False
+    return True
+"""
+
+    if problem_id == 3:
+        if style == "ai":
+            return """
+def solution(lst):
+    \"\"\"Return sum of list.\"\"\"
+    return sum(lst)
+"""
+        else:
+            return """
+def solution(l):
+    s=0
+    for i in l:
+        s+=i
+    return s
+"""
+
+    if problem_id == 4:
+        if style == "ai":
+            return """
+def solution(s):
+    \"\"\"Reverse a string.\"\"\"
+    return s[::-1]
+"""
+        else:
+            return """
+def solution(s):
+    r=""
+    for i in s:
+        r=i+r
+    return r
+"""
+
+    if problem_id == 5:
+        if style == "ai":
+            return """
+def solution(n):
+    \"\"\"Return Fibonacci sequence up to n.\"\"\"
+    a, b = 0, 1
+    sequence = []
+    for _ in range(n):
+        sequence.append(a)
+        a, b = b, a + b
+    return sequence
+"""
+        else:
+            return """
+def solution(n):
+    a=0
+    b=1
+    l=[]
+    for i in range(n):
+        l.append(a)
+        temp=a+b
+        a=b
+        b=temp
+    return l
+"""
+
+# Generate 200 files
+for i in range(1, 201):
+
+    problem_id = random.randint(1, 20)
+
+    ai_code = generate_problem(problem_id, "ai")
+    human_code = generate_problem(problem_id, "human")
+
+    with open(os.path.join(ai_path, f"{i}.py"), "w", encoding="utf-8") as f:
+        f.write(ai_code.strip())
+
+    with open(os.path.join(human_path, f"{i}.py"), "w", encoding="utf-8") as f:
+        f.write(human_code.strip())
+
+print("200 AI and Human files generated successfully.")
