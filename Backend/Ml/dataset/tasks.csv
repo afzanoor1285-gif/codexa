@@ -1,0 +1,201 @@
+task_id,language,description,difficulty
+1,python,Write a function to reverse a string.,medium
+2,python,Create a function that returns Fibonacci numbers.,easy
+3,python,Write a function to remove duplicates from a list.,medium
+4,python,Write a function to remove duplicates from a list.,medium
+5,python,Write a function to find the largest element in a list.,medium
+6,python,Create a function that checks if a number is prime.,easy
+7,python,Write a function to find the largest element in a list.,medium
+8,python,Write a function to remove duplicates from a list.,medium
+9,python,Write a program to count vowels in a string.,hard
+10,python,Write a function to reverse a string.,easy
+11,python,Write a function to reverse a string.,easy
+12,python,Create a function that checks if a number is prime.,medium
+13,python,Write a function to compute factorial using recursion.,hard
+14,python,Write a function to reverse a string.,medium
+15,python,Write a program to count vowels in a string.,medium
+16,python,Create a function that checks if a number is prime.,easy
+17,python,Create a function that returns Fibonacci numbers.,easy
+18,python,Write a function to find the largest element in a list.,easy
+19,python,Write a function to remove duplicates from a list.,easy
+20,python,Implement bubble sort.,hard
+21,python,Write a function to compute factorial using recursion.,easy
+22,python,Write a function to remove duplicates from a list.,easy
+23,python,Create a function that returns Fibonacci numbers.,easy
+24,python,Create a function that checks if a number is prime.,easy
+25,python,Write a function to check if a string is a palindrome.,hard
+26,python,Implement bubble sort.,easy
+27,python,Implement bubble sort.,easy
+28,python,Write a function to reverse a string.,hard
+29,python,Write a function to find the largest element in a list.,hard
+30,python,Write a function to remove duplicates from a list.,medium
+31,python,Write a function to remove duplicates from a list.,medium
+32,python,Implement bubble sort.,easy
+33,python,Implement binary search.,easy
+34,python,Create a function that checks if a number is prime.,easy
+35,python,Implement bubble sort.,hard
+36,python,Write a function to check if a string is a palindrome.,medium
+37,python,Write a function to remove duplicates from a list.,easy
+38,python,Create a function that checks if a number is prime.,medium
+39,python,Implement binary search.,hard
+40,python,Write a function to remove duplicates from a list.,hard
+41,python,Write a function to remove duplicates from a list.,easy
+42,python,Write a function to remove duplicates from a list.,hard
+43,python,Write a function to find the largest element in a list.,easy
+44,python,Write a function to find the largest element in a list.,hard
+45,python,Write a function to check if a string is a palindrome.,medium
+46,python,Write a function to check if a string is a palindrome.,easy
+47,python,Write a function to compute factorial using recursion.,easy
+48,python,Implement binary search.,easy
+49,python,Write a function to reverse a string.,hard
+50,python,Write a function to check if a string is a palindrome.,easy
+51,python,Write a function to compute factorial using recursion.,easy
+52,python,Write a program to count vowels in a string.,easy
+53,python,Write a function to compute factorial using recursion.,hard
+54,python,Implement bubble sort.,medium
+55,python,Create a function that returns Fibonacci numbers.,hard
+56,python,Implement bubble sort.,easy
+57,python,Write a function to compute factorial using recursion.,easy
+58,python,Write a function to find the largest element in a list.,hard
+59,python,Create a function that returns Fibonacci numbers.,easy
+60,python,Write a function to compute factorial using recursion.,hard
+61,python,Create a function that returns Fibonacci numbers.,medium
+62,python,Write a function to compute factorial using recursion.,hard
+63,python,Write a function to remove duplicates from a list.,medium
+64,python,Write a function to remove duplicates from a list.,easy
+65,python,Create a function that returns Fibonacci numbers.,hard
+66,python,Create a function that checks if a number is prime.,medium
+67,python,Create a function that returns Fibonacci numbers.,hard
+68,python,Implement bubble sort.,easy
+69,python,Write a function to compute factorial using recursion.,easy
+70,python,Write a function to remove duplicates from a list.,easy
+71,python,Write a function to compute factorial using recursion.,hard
+72,python,Create a function that returns Fibonacci numbers.,hard
+73,python,Create a function that checks if a number is prime.,hard
+74,python,Write a function to remove duplicates from a list.,easy
+75,python,Implement binary search.,hard
+76,python,Create a function that returns Fibonacci numbers.,easy
+77,python,Create a function that returns Fibonacci numbers.,easy
+78,python,Write a function to find the largest element in a list.,medium
+79,python,Write a program to count vowels in a string.,easy
+80,python,Implement bubble sort.,easy
+81,python,Write a function to remove duplicates from a list.,medium
+82,python,Write a function to reverse a string.,medium
+83,python,Write a function to reverse a string.,hard
+84,python,Write a function to remove duplicates from a list.,easy
+85,python,Write a function to find the largest element in a list.,medium
+86,python,Write a function to check if a string is a palindrome.,hard
+87,python,Implement binary search.,hard
+88,python,Write a function to remove duplicates from a list.,medium
+89,python,Create a function that returns Fibonacci numbers.,medium
+90,python,Write a function to reverse a string.,easy
+91,python,Write a function to reverse a string.,medium
+92,python,Create a function that checks if a number is prime.,easy
+93,python,Write a function to find the largest element in a list.,easy
+94,python,Implement bubble sort.,medium
+95,python,Write a program to count vowels in a string.,hard
+96,python,Create a function that checks if a number is prime.,hard
+97,python,Implement bubble sort.,hard
+98,python,Write a program to count vowels in a string.,hard
+99,python,Implement bubble sort.,hard
+100,python,Create a function that returns Fibonacci numbers.,medium
+101,python,Create a function that checks if a number is prime.,hard
+102,python,Write a program to count vowels in a string.,hard
+103,python,Write a program to count vowels in a string.,medium
+104,python,Write a function to find the largest element in a list.,medium
+105,python,Write a function to compute factorial using recursion.,medium
+106,python,Implement bubble sort.,medium
+107,python,Create a function that returns Fibonacci numbers.,hard
+108,python,Write a function to find the largest element in a list.,medium
+109,python,Create a function that checks if a number is prime.,hard
+110,python,Write a function to remove duplicates from a list.,hard
+111,python,Write a function to check if a string is a palindrome.,medium
+112,python,Write a function to find the largest element in a list.,medium
+113,python,Write a function to reverse a string.,hard
+114,python,Implement binary search.,easy
+115,python,Write a program to count vowels in a string.,hard
+116,python,Write a function to compute factorial using recursion.,hard
+117,python,Write a program to count vowels in a string.,easy
+118,python,Create a function that checks if a number is prime.,medium
+119,python,Create a function that returns Fibonacci numbers.,hard
+120,python,Implement bubble sort.,hard
+121,python,Write a function to remove duplicates from a list.,hard
+122,python,Implement binary search.,medium
+123,python,Write a function to remove duplicates from a list.,hard
+124,python,Write a function to reverse a string.,hard
+125,python,Write a function to reverse a string.,medium
+126,python,Implement binary search.,easy
+127,python,Write a function to compute factorial using recursion.,hard
+128,python,Create a function that checks if a number is prime.,medium
+129,python,Write a function to reverse a string.,medium
+130,python,Write a function to check if a string is a palindrome.,medium
+131,python,Write a function to compute factorial using recursion.,medium
+132,python,Implement binary search.,easy
+133,python,Write a function to compute factorial using recursion.,medium
+134,python,Write a function to remove duplicates from a list.,medium
+135,python,Write a function to find the largest element in a list.,medium
+136,python,Create a function that returns Fibonacci numbers.,hard
+137,python,Create a function that checks if a number is prime.,hard
+138,python,Write a program to count vowels in a string.,easy
+139,python,Implement bubble sort.,easy
+140,python,Write a function to remove duplicates from a list.,easy
+141,python,Write a function to find the largest element in a list.,medium
+142,python,Write a program to count vowels in a string.,hard
+143,python,Write a function to compute factorial using recursion.,medium
+144,python,Implement bubble sort.,easy
+145,python,Write a function to remove duplicates from a list.,medium
+146,python,Write a function to remove duplicates from a list.,medium
+147,python,Write a program to count vowels in a string.,hard
+148,python,Write a program to count vowels in a string.,hard
+149,python,Create a function that checks if a number is prime.,medium
+150,python,Implement bubble sort.,easy
+151,python,Write a function to reverse a string.,medium
+152,python,Write a function to remove duplicates from a list.,easy
+153,python,Create a function that returns Fibonacci numbers.,easy
+154,python,Create a function that returns Fibonacci numbers.,medium
+155,python,Write a function to compute factorial using recursion.,medium
+156,python,Write a function to remove duplicates from a list.,hard
+157,python,Write a function to remove duplicates from a list.,medium
+158,python,Write a function to reverse a string.,medium
+159,python,Write a function to check if a string is a palindrome.,hard
+160,python,Write a function to find the largest element in a list.,hard
+161,python,Write a function to reverse a string.,hard
+162,python,Write a function to reverse a string.,easy
+163,python,Write a function to reverse a string.,medium
+164,python,Write a function to compute factorial using recursion.,easy
+165,python,Create a function that checks if a number is prime.,medium
+166,python,Write a program to count vowels in a string.,medium
+167,python,Create a function that checks if a number is prime.,hard
+168,python,Write a function to check if a string is a palindrome.,medium
+169,python,Write a function to reverse a string.,easy
+170,python,Write a program to count vowels in a string.,easy
+171,python,Write a function to find the largest element in a list.,easy
+172,python,Implement binary search.,hard
+173,python,Write a function to reverse a string.,hard
+174,python,Write a function to reverse a string.,hard
+175,python,Write a function to remove duplicates from a list.,easy
+176,python,Create a function that returns Fibonacci numbers.,medium
+177,python,Write a function to check if a string is a palindrome.,medium
+178,python,Write a function to find the largest element in a list.,easy
+179,python,Write a function to reverse a string.,medium
+180,python,Write a function to compute factorial using recursion.,medium
+181,python,Write a function to check if a string is a palindrome.,hard
+182,python,Write a program to count vowels in a string.,hard
+183,python,Write a program to count vowels in a string.,hard
+184,python,Implement binary search.,hard
+185,python,Write a function to reverse a string.,medium
+186,python,Write a function to find the largest element in a list.,hard
+187,python,Write a function to find the largest element in a list.,easy
+188,python,Create a function that returns Fibonacci numbers.,easy
+189,python,Implement binary search.,easy
+190,python,Write a function to reverse a string.,hard
+191,python,Create a function that checks if a number is prime.,hard
+192,python,Write a program to count vowels in a string.,easy
+193,python,Write a function to find the largest element in a list.,easy
+194,python,Write a function to compute factorial using recursion.,medium
+195,python,Write a program to count vowels in a string.,medium
+196,python,Write a function to reverse a string.,easy
+197,python,Write a function to reverse a string.,hard
+198,python,Write a function to remove duplicates from a list.,medium
+199,python,Write a function to compute factorial using recursion.,medium
+200,python,Create a function that checks if a number is prime.,easy
