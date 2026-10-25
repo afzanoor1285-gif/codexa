@@ -182,22 +182,22 @@ const StudentListView = () => {
       {/* Main Content */}
       <main className="lg:ml-64">
         {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-6 py-4 flex items-center gap-4 z-10">
+        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 z-10">
           <button
             onClick={() => navigate(-1)}
             className="lg:hidden p-2 hover:bg-muted rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-foreground">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-bold text-foreground sm:text-2xl">
               {assignment?.title}
             </h1>
             <p className="text-sm text-muted-foreground">{assignment?.className}</p>
           </div>
         </header>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader className="w-8 h-8 text-muted-foreground animate-spin" />
@@ -307,7 +307,7 @@ const StudentListView = () => {
               ) : (
                 <div className="bg-card rounded-2xl border border-border overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full min-w-[720px]">
                       <thead>
                         <tr className="border-b border-border bg-muted/50">
                           {visibleColumns.includes("student") && <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Student Name</th>}

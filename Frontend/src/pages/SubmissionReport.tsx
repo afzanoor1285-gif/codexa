@@ -143,23 +143,23 @@ const SubmissionReport = () => {
       </aside>
 
       <main className="lg:ml-64">
-        <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-border bg-card/95 px-6 py-4 backdrop-blur-sm">
+        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm sm:gap-4 sm:px-6 sm:py-4">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-foreground">Submission report</h1>
-            <p className="text-sm text-muted-foreground">Individual student submission and analysis</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-bold text-foreground sm:text-2xl">Submission report</h1>
+            <p className="hidden text-sm text-muted-foreground sm:block">Individual student submission and analysis</p>
           </div>
           {submission && (
-            <Button onClick={handleDownload} disabled={downloading}>
+            <Button onClick={handleDownload} disabled={downloading} className="shrink-0 px-2 sm:px-4">
               {downloading ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-              Download code
+              <span className="hidden sm:inline">Download code</span>
             </Button>
           )}
         </header>
 
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 p-4 sm:p-6">
           {loading ? (
             <div className="flex justify-center py-16">
               <Loader className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -169,10 +169,10 @@ const SubmissionReport = () => {
           ) : submission && (
             <>
               {error && <div role="alert" className="rounded-lg bg-destructive/10 p-4 text-destructive">{error}</div>}
-              <section className="grid gap-4 rounded-2xl border border-border bg-card p-6 md:grid-cols-2">
+              <section className="grid gap-4 rounded-2xl border border-border bg-card p-4 sm:p-6 md:grid-cols-2">
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">{submission.studentName}</h2>
-                  <p className="text-sm text-muted-foreground">{submission.studentEmail}</p>
+                  <p className="break-all text-sm text-muted-foreground">{submission.studentEmail}</p>
                 </div>
                 <div>
                   <p className="font-medium text-foreground">{submission.assignmentTitle}</p>
@@ -189,7 +189,7 @@ const SubmissionReport = () => {
                 )}
               </section>
 
-              <section className="rounded-2xl border border-border bg-card p-6">
+              <section className="rounded-2xl border border-border bg-card p-4 sm:p-6">
                 <h2 className="text-lg font-semibold text-foreground">Grade this submission</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   AI analysis checks authorship only; review the code and enter the assignment score here.
@@ -235,7 +235,7 @@ const SubmissionReport = () => {
                 </form>
               </section>
 
-              <section className="rounded-2xl border border-border bg-card p-6">
+              <section className="rounded-2xl border border-border bg-card p-4 sm:p-6">
                 <h2 className="text-lg font-semibold text-foreground">AI vs. human writing estimate</h2>
                 {submission.aiPercentage !== null && submission.humanPercentage !== null ? (
                   <>
@@ -272,11 +272,11 @@ const SubmissionReport = () => {
               </section>
 
               <section className="overflow-hidden rounded-2xl border border-border bg-card">
-                <div className="flex items-center gap-2 border-b border-border px-6 py-4">
+                <div className="flex items-center gap-2 border-b border-border px-4 py-4 sm:px-6">
                   <FileCode className="h-5 w-5 text-muted-foreground" />
                   <h2 className="font-semibold text-foreground">Submitted code</h2>
                 </div>
-                <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap break-words p-6 text-sm text-foreground">
+                <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap break-words p-4 text-xs text-foreground sm:p-6 sm:text-sm">
                   <code>{submission.code}</code>
                 </pre>
               </section>

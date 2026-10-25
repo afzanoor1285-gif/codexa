@@ -14,6 +14,7 @@ import {
   Plus,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
+import MobileNavigation from "@/components/MobileNavigation";
 import { getToken } from "@/lib/auth";
 
 interface Class {
@@ -203,17 +204,24 @@ const MyClasses = () => {
       {/* Main Content */}
       <main className="lg:ml-64">
         {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-6 py-4 flex items-center justify-between z-10">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">My Classes</h1>
+        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 z-10">
+          <MobileNavigation
+            items={[
+              { label: "My Classes", icon: BookOpen, href: "/teacher/classes" },
+              { label: "Teacher Dashboard", icon: Users, href: "/teacher/dashboard" },
+              { label: "Sign Out", icon: LogOut, href: "/teacher/login", onSelect: handleLogout },
+            ]}
+          />
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">My Classes</h1>
             <p className="text-sm text-muted-foreground">
               Manage your courses and assignments
             </p>
           </div>
-          <div className="flex items-center gap-4">
-            <Button onClick={openCreateForm} className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            <Button onClick={openCreateForm} className="flex items-center gap-2 px-3 sm:px-4">
               <Plus className="w-4 h-4" />
-              Create Class
+              <span className="hidden sm:inline">Create Class</span>
             </Button>
             <Button variant="outline" size="icon">
               <Bell className="w-5 h-5" />
@@ -224,11 +232,11 @@ const MyClasses = () => {
           </div>
         </header>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {showCreateForm && (
             <form
               onSubmit={handleCreateClass}
-              className="mb-8 rounded-2xl border border-border bg-card p-6"
+              className="mb-8 rounded-2xl border border-border bg-card p-4 sm:p-6"
             >
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
@@ -294,7 +302,7 @@ const MyClasses = () => {
                 ) : (
                   <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-border p-3">
                     {students.map((student) => (
-                      <label key={student.email} className="flex cursor-pointer items-center gap-3 text-sm">
+                      <label key={student.email} className="flex cursor-pointer flex-wrap items-center gap-3 text-sm">
                         <input
                           type="checkbox"
                           checked={selectedStudents.includes(student.email)}
@@ -302,7 +310,7 @@ const MyClasses = () => {
                           className="h-4 w-4 rounded border-border accent-primary"
                         />
                         <span className="text-foreground">{student.name}</span>
-                        <span className="text-muted-foreground">{student.email}</span>
+                        <span className="break-all text-muted-foreground">{student.email}</span>
                       </label>
                     ))}
                   </div>
@@ -364,7 +372,7 @@ const MyClasses = () => {
                 <div
                   key={cls.id}
                   onClick={() => handleClassClick(cls.id)}
-                  className="group bg-card rounded-2xl border border-border p-6 hover:border-secondary/50 hover:shadow-lg transition-all cursor-pointer"
+                  className="group bg-card rounded-2xl border border-border p-4 sm:p-6 hover:border-secondary/50 hover:shadow-lg transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div>

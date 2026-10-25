@@ -123,7 +123,7 @@ const CreateAssignment = () => {
       {/* Main Content */}
       <main className="lg:ml-64">
         {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-6 py-4 flex items-center gap-4 z-10">
+        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 z-10">
           <button
             onClick={() => navigate(`/teacher/class/${classId}`)}
             className="lg:hidden p-2 hover:bg-muted rounded-lg transition-colors"
@@ -131,7 +131,7 @@ const CreateAssignment = () => {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-xl font-bold text-foreground sm:text-2xl">
               Create Assignment
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -140,7 +140,7 @@ const CreateAssignment = () => {
           </div>
         </header>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <div className="max-w-2xl">
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
@@ -154,7 +154,7 @@ const CreateAssignment = () => {
               )}
 
               {/* Title Field */}
-              <div className="bg-card rounded-2xl border border-border p-6">
+              <div className="bg-card rounded-2xl border border-border p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <Pen className="w-5 h-5 text-muted-foreground" />
                   <Label htmlFor="title" className="text-base font-semibold">
@@ -174,7 +174,7 @@ const CreateAssignment = () => {
               </div>
 
               {/* Description Field */}
-              <div className="bg-card rounded-2xl border border-border p-6">
+              <div className="bg-card rounded-2xl border border-border p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <FileText className="w-5 h-5 text-muted-foreground" />
                   <Label htmlFor="description" className="text-base font-semibold">
@@ -198,7 +198,7 @@ const CreateAssignment = () => {
               </div>
 
               {/* Due Date Field */}
-              <div className="bg-card rounded-2xl border border-border p-6">
+              <div className="bg-card rounded-2xl border border-border p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <Calendar className="w-5 h-5 text-muted-foreground" />
                   <Label htmlFor="dueDate" className="text-base font-semibold">
@@ -218,7 +218,7 @@ const CreateAssignment = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row">
                 <Button
                   type="submit"
                   disabled={loading}

@@ -172,7 +172,7 @@ const ClassDetail = () => {
       {/* Main Content */}
       <main className="lg:ml-64">
         {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-6 py-4 flex items-center justify-between z-10">
+        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 z-10">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate("/teacher/classes")}
@@ -181,7 +181,7 @@ const ClassDetail = () => {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
+              <h1 className="text-lg font-bold text-foreground sm:text-2xl">
                 {classData?.name} - {classData?.code}
               </h1>
               <p className="text-sm text-muted-foreground">{classData?.section}</p>
@@ -189,14 +189,14 @@ const ClassDetail = () => {
           </div>
           <Button
             onClick={handleCreateAssignment}
-            className="flex items-center gap-2"
+            className="flex shrink-0 items-center gap-2 px-3 sm:px-4"
           >
             <Plus className="w-4 h-4" />
-            Create Assignment
+            <span className="hidden sm:inline">Create Assignment</span>
           </Button>
         </header>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {location.state?.assignmentCreated && (
             <div className="bg-accent/10 text-accent rounded-lg p-4 mb-6" role="status">
               Assignment created successfully.
@@ -232,7 +232,7 @@ const ClassDetail = () => {
               {sortedAssignments.map((assignment) => (
                 <div
                   key={assignment.id}
-                  className="bg-card rounded-2xl border border-border p-6 hover:shadow-lg transition-shadow"
+                  className="bg-card rounded-2xl border border-border p-4 sm:p-6 hover:shadow-lg transition-shadow"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
@@ -245,7 +245,7 @@ const ClassDetail = () => {
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-4 gap-4 mb-4">
+                  <div className="grid grid-cols-2 gap-3 mb-4 sm:gap-4 md:grid-cols-4">
                     {/* Total Students */}
                     <div className="bg-muted/50 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-2">

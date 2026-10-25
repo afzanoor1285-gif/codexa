@@ -21,6 +21,7 @@ import {
 import BrandLogo from "@/components/BrandLogo";
 import ProfilePhoto from "@/components/ProfilePhoto";
 import AccountSettingsDialog from "@/components/AccountSettingsDialog";
+import MobileNavigation from "@/components/MobileNavigation";
 import { Input } from "@/components/ui/input";
 import { getUser, logout } from "@/lib/auth";
 
@@ -225,13 +226,24 @@ const TeacherDashboard = () => {
       {/* Main Content */}
       <main className="lg:ml-64">
         {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-6 py-4 flex items-center justify-between z-10">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Teacher Dashboard</h1>
+        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 justify-between z-10">
+          <MobileNavigation
+            items={[
+              { label: "Overview", icon: TrendingUp, onSelect: () => setActiveTab("overview") },
+              { label: "My Classes", icon: BookOpen, href: "/teacher/classes" },
+              { label: "Assignments", icon: FileCode, onSelect: () => setActiveTab("assignments") },
+              { label: "Students", icon: Users, onSelect: () => setActiveTab("students") },
+              { label: "Plagiarism Reports", icon: AlertTriangle, onSelect: () => setActiveTab("plagiarism") },
+              { label: "Settings", icon: Settings, onSelect: () => setSettingsOpen(true) },
+              { label: "Sign Out", icon: LogOut, href: "/", onSelect: logout },
+            ]}
+          />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Teacher Dashboard</h1>
             <p className="text-sm text-muted-foreground">Welcome back, {teacherName}</p>
             {user?.bio && <p className="mt-1 max-w-xl text-sm text-muted-foreground">{user.bio}</p>}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input placeholder="Search students..." className="pl-10 w-64" />
@@ -243,13 +255,13 @@ const TeacherDashboard = () => {
           </div>
         </header>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {activeTab === "students" ? (
             <div>
               <h2 className="text-2xl font-bold mb-4">Students</h2>
               <div className="mb-4 p-4 bg-muted rounded-lg">
                 <h3 className="font-semibold mb-2">Add New Student</h3>
-                <div className="flex gap-2 mb-2">
+                <div className="mb-2 flex flex-col gap-2 sm:flex-row">
                   <Input
                     placeholder="Name"
                     value={newName}
@@ -325,8 +337,8 @@ const TeacherDashboard = () => {
               </div>
               <div className="divide-y divide-border">
                 {recentSubmissions.map((submission) => (
-                  <div key={submission.id} className={`px-6 py-4 flex items-center justify-between hover:bg-muted/50 transition-colors ${submission.aiLabel === 'AI' ? 'bg-yellow-500/5 border-l-4 border-l-yellow-500' : ''}`}>
-                    <div className="flex items-center gap-4">
+                  <div key={submission.id} className={`flex flex-col gap-3 px-4 py-4 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:px-6 ${submission.aiLabel === 'AI' ? 'bg-yellow-500/5 border-l-4 border-l-yellow-500' : ''}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end sm:gap-4">
                       <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-sm font-semibold text-secondary">
                         {submission.name.split(" ").map(n => n[0]).join("")}
                       </div>

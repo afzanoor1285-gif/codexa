@@ -32,6 +32,7 @@ import {
 import BrandLogo from "@/components/BrandLogo";
 import ProfilePhoto from "@/components/ProfilePhoto";
 import AccountSettingsDialog from "@/components/AccountSettingsDialog";
+import MobileNavigation from "@/components/MobileNavigation";
 
 interface Assignment {
   id: string;
@@ -398,23 +399,33 @@ const StudentDashboard = () => {
       {/* Main Content */}
       <main className="lg:ml-64">
         {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-6 py-4 flex items-center justify-between z-10">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Student Dashboard</h1>
+        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 justify-between z-10">
+          <MobileNavigation
+            items={[
+              { label: "Overview", icon: TrendingUp, href: "/student/dashboard" },
+              { label: "My Assignments", icon: FileCode, href: "/student/dashboard#my-assignments" },
+              { label: "Submit Code", icon: Upload, href: "/student/submit" },
+              { label: "Grades and Progress", icon: Award, href: "/student/dashboard#your-progress" },
+              { label: "Settings", icon: Settings, onSelect: () => setSettingsOpen(true) },
+              { label: "Sign Out", icon: LogOut, href: "/", onSelect: logout },
+            ]}
+          />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Student Dashboard</h1>
             <p className="text-sm text-muted-foreground">
-              Welcome back, {studentName} · {user?.email || "Email unavailable"} · {user?.degree || "Degree not provided"}
+              <span className="block truncate">Welcome back, {studentName} · {user?.email || "Email unavailable"} · {user?.degree || "Degree not provided"}</span>
             </p>
             {user?.bio && <p className="mt-1 max-w-xl text-sm text-muted-foreground">{user.bio}</p>}
           </div>
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            <Button variant="outline" size="icon" className="hidden sm:inline-flex">
               <Bell className="w-5 h-5" />
             </Button>
             <ProfilePhoto initials={initials} role="student" />
           </div>
         </header>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Stats Grid */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {stats.map((stat) => (
@@ -554,7 +565,7 @@ const StudentDashboard = () => {
           </div>
 
           {/* Progress Chart */}
-          <div className="mt-6 bg-card rounded-2xl border border-border p-6">
+          <div id="your-progress" className="mt-6 bg-card rounded-2xl border border-border p-4 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-foreground">Your Progress</h3>
@@ -564,7 +575,7 @@ const StudentDashboard = () => {
                     : `Average score by ${chartPeriod === "year" ? "month" : "graded day"}`}
                 </p>
               </div>
-              <div className="flex gap-1 rounded-lg bg-muted p-1" aria-label="Progress chart period">
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:flex" aria-label="Progress chart period">
                 {([
                   ["all", "All"],
                   ["week", "Weekly"],
@@ -576,7 +587,7 @@ const StudentDashboard = () => {
                     type="button"
                     aria-pressed={chartPeriod === period}
                     onClick={() => setChartPeriod(period)}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:text-sm ${
                       chartPeriod === period
                         ? "bg-background text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground"

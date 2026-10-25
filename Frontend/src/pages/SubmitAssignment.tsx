@@ -197,21 +197,21 @@ const SubmitAssignment = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-card border-b border-border px-6 py-4">
+      <header className="bg-card border-b border-border px-4 py-3 sm:px-6 sm:py-4">
         <div className="container mx-auto flex items-center gap-4">
           <Link to="/student/dashboard" className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div className="flex items-center gap-2">
-            <BrandLogo className="w-10 h-10 object-contain" />
-            <span className="text-xl font-bold text-foreground">Codexa</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <BrandLogo className="h-9 w-9 shrink-0 object-contain sm:h-10 sm:w-10" />
+            <span className="truncate text-lg font-bold text-foreground sm:text-xl">Codexa</span>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-3xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Submit Assignment</h1>
+          <h1 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">Submit Assignment</h1>
           <p className="text-muted-foreground">
             Submit your work for the selected class assignment.
           </p>
@@ -230,7 +230,7 @@ const SubmitAssignment = () => {
           </div>
         ) : assignment ? (
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-card rounded-2xl border border-border p-6">
+          <div className="bg-card rounded-2xl border border-border p-4 sm:p-6">
             <h2 className="font-semibold text-foreground mb-2">{assignment.title}</h2>
             <p className="text-sm text-muted-foreground">{assignment.course}</p>
             <p className="mt-3 text-sm text-foreground">{assignment.description}</p>
@@ -241,11 +241,11 @@ const SubmitAssignment = () => {
           </div>
 
           {/* File Upload */}
-          <div className="bg-card rounded-2xl border border-border p-6">
+          <div className="bg-card rounded-2xl border border-border p-4 sm:p-6">
             <h2 className="font-semibold text-foreground mb-4">Upload Code Files</h2>
             
             <div
-              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+              className={`border-2 border-dashed rounded-xl p-5 text-center transition-colors sm:p-8 ${
                 dragActive 
                   ? "border-secondary bg-secondary/5" 
                   : "border-border hover:border-secondary/50"
@@ -286,12 +286,12 @@ const SubmitAssignment = () => {
                 {files.map((file, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                    className="flex items-start justify-between gap-3 p-3 bg-muted/50 rounded-lg"
                   >
                     <div className="flex items-center gap-3">
                       <FileCode className="w-5 h-5 text-secondary" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{file.name}</p>
+                      <div className="min-w-0">
+                        <p className="break-all text-sm font-medium text-foreground">{file.name}</p>
                         <p className="text-xs text-muted-foreground">
                           {(file.size / 1024).toFixed(1)} KB
                         </p>
@@ -310,7 +310,7 @@ const SubmitAssignment = () => {
             )}
           </div>
 
-          <div className="bg-card rounded-2xl border border-border p-6">
+          <div className="bg-card rounded-2xl border border-border p-4 sm:p-6">
             <Label htmlFor="code" className="font-semibold text-foreground">Code</Label>
             <Textarea
               id="code"
@@ -323,7 +323,7 @@ const SubmitAssignment = () => {
           </div>
 
           {/* Additional Notes */}
-          <div className="bg-card rounded-2xl border border-border p-6">
+          <div className="bg-card rounded-2xl border border-border p-4 sm:p-6">
             <h2 className="font-semibold text-foreground mb-4">Additional Notes (Optional)</h2>
             <Textarea
               placeholder="Add any notes or comments for your instructor..."
@@ -351,7 +351,7 @@ const SubmitAssignment = () => {
               {submitError}
             </p>
           )}
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:gap-4">
             <Button
               type="submit"
               variant="hero"
@@ -371,8 +371,8 @@ const SubmitAssignment = () => {
                 </>
               )}
             </Button>
-            <Link to="/student/dashboard">
-              <Button type="button" variant="outline" size="lg">
+            <Link to="/student/dashboard" className="w-full sm:w-auto">
+              <Button type="button" variant="outline" size="lg" className="w-full">
                 Cancel
               </Button>
             </Link>
