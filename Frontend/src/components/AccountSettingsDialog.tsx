@@ -15,7 +15,6 @@ import {
   Sun,
   UserRound,
   Accessibility,
-  Monitor,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -35,6 +34,7 @@ import {
   applyTheme,
   type ThemePreference,
 } from "@/lib/theme";
+import { STUDENT_PROGRAMS, STUDENT_SEMESTERS } from "@/lib/student-programs";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000";
 const NAV_ITEMS = [
@@ -87,7 +87,7 @@ type SettingsState = {
 };
 
 const DEFAULT_SETTINGS: SettingsState = {
-  appearance: { theme: "system", compact_layout: false, reduced_motion: false, font_size: "default" },
+  appearance: { theme: "light", compact_layout: false, reduced_motion: false, font_size: "default" },
   notifications: {
     assignment_deadline_reminders: false,
     submission_confirmation: false,
@@ -115,7 +115,7 @@ interface AccountSettingsDialogProps {
 
 interface ApiSettingsResponse {
   settings: Partial<SettingsState>;
-  user: AuthUser & { student_id?: string; semester?: string; department?: string; designation?: string };
+  user: AuthUser & { student_id?: string; department?: string; designation?: string };
   email_notifications_available: boolean;
   deadline_reminders_available: boolean;
   pdf_reports_available: boolean;
@@ -131,6 +131,9 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
   const [bio, setBio] = useState("");
   const [department, setDepartment] = useState("");
   const [designation, setDesignation] = useState("");
+  const [studentDegree, setStudentDegree] = useState("");
+  const [semester, setSemester] = useState("");
+  const [cohortLocked, setCohortLocked] = useState(false);
   const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
   const initialAppearance = useRef({ ...DEFAULT_SETTINGS.appearance });
   const [emailAvailable, setEmailAvailable] = useState(false);
@@ -144,6 +147,9 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
   const [requestingDeletion, setRequestingDeletion] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingCohort, setSavingCohort] = useState(false);
+  const [cohortSaveError, setCohortSaveError] = useState<string | null>(null);
+  const [cohortSaveSuccess, setCohortSaveSuccess] = useState<string | null>(null);
   const [changingPassword, setChangingPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -178,6 +184,7 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
         if (!active) return;
         const loaded = { ...DEFAULT_SETTINGS, ...data.settings } as SettingsState;
         loaded.appearance = { ...DEFAULT_SETTINGS.appearance, ...data.settings.appearance };
+        loaded.appearance.theme = loaded.appearance.theme === "dark" ? "dark" : "light";
         loaded.notifications = { ...DEFAULT_SETTINGS.notifications, ...data.settings.notifications };
         loaded.analysis = { ...DEFAULT_SETTINGS.analysis, ...data.settings.analysis };
         if (role === "teacher") {
@@ -191,12 +198,18 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
         setBio(data.user.bio ?? "");
         setDepartment(data.user.department ?? "");
         setDesignation(data.user.designation ?? "");
+        setStudentDegree(data.user.degree ?? "");
+        setSemester(data.user.semester ? String(data.user.semester) : "");
+        setCohortLocked(typeof data.user.semester === "number");
+        setCohortSaveError(null);
+        setCohortSaveSuccess(null);
         setEmailAvailable(Boolean(data.email_notifications_available));
         setDeadlineAvailable(Boolean(data.deadline_reminders_available));
         setPdfAvailable(Boolean(data.pdf_reports_available));
         setSupportAvailable(Boolean(data.support_available));
         setDeletionRequestPending(Boolean(data.deletion_request_pending));
         localStorage.setItem("codexa_user", JSON.stringify(data.user));
+        window.dispatchEvent(new CustomEvent("codexa:user-updated", { detail: data.user }));
         applyTheme(loaded.appearance.theme);
         applyAccessibilityPreferences(
           loaded.appearance.reduced_motion,
@@ -231,6 +244,9 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
     const token = getToken();
     if (!token) throw new Error("Your session has expired. Please log in again.");
     if (!name.trim()) throw new Error("Please enter your name.");
+    if (role === "student" && (!studentDegree || !semester)) {
+      throw new Error("Select your degree and current semester to find eligible classes.");
+    }
 
     const profileResponse = await fetch(`${API_BASE_URL}/api/profile`, {
       method: "PUT",
@@ -240,12 +256,18 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
         bio: bio.trim(),
         theme: settings.appearance.theme,
         ...(role === "teacher" ? { department: department.trim(), designation: designation.trim() } : {}),
+        ...(role === "student" ? { degree: studentDegree, semester: Number(semester) } : {}),
       }),
     });
     const profileData = await profileResponse.json();
     if (!profileResponse.ok || !profileData.user) {
       throw new Error(profileData.error || "Unable to save profile details.");
     }
+
+    const savedProfile = profileData.user as AuthUser;
+    localStorage.setItem("codexa_user", JSON.stringify(savedProfile));
+    setUser(savedProfile);
+    window.dispatchEvent(new CustomEvent("codexa:user-updated", { detail: savedProfile }));
 
     const settingsToSave = role === "teacher"
       ? settings
@@ -267,7 +289,7 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
       );
     }
 
-    const updatedUser = { ...profileData.user, settings: settingsData.settings };
+    const updatedUser = { ...savedProfile, settings: settingsData.settings };
     localStorage.setItem("codexa_user", JSON.stringify(updatedUser));
     setUser(updatedUser);
     applyTheme(settings.appearance.theme);
@@ -279,6 +301,88 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
     initialAppearance.current = { ...settings.appearance };
     window.dispatchEvent(new CustomEvent("codexa:user-updated", { detail: updatedUser }));
     setSuccess("Your settings have been saved.");
+  };
+
+  const saveStudentCohort = async () => {
+    const token = getToken();
+    if (!token) throw new Error("Your session has expired. Please log in again.");
+    if (!studentDegree) throw new Error("Select your degree / department.");
+    if (!semester) throw new Error("Select your current semester.");
+
+    const response = await fetch(`${API_BASE_URL}/api/profile`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({
+        name: name.trim(),
+        bio: bio.trim(),
+        theme: settings.appearance.theme,
+        degree: studentDegree,
+        semester: Number(semester),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.user) {
+      throw new Error(data.error || "Unable to save your program and semester.");
+    }
+
+    let savedProfile = data.user as AuthUser;
+    const confirmedCohort = data.cohort as { degree?: unknown; semester?: unknown } | undefined;
+    let confirmedDegree = typeof confirmedCohort?.degree === "string"
+      ? confirmedCohort.degree
+      : typeof savedProfile.degree === "string"
+        ? savedProfile.degree
+        : "";
+    const savedDegree = confirmedDegree.trim().toUpperCase();
+    const selectedDegree = studentDegree.trim().toUpperCase();
+    let savedSemester = Number(confirmedCohort?.semester ?? savedProfile.semester);
+
+    if (savedDegree !== selectedDegree || savedSemester !== Number(semester)) {
+      const currentProfileResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: { Authorization: "Bearer " + token },
+      });
+      const currentProfileData = await currentProfileResponse.json();
+      if (currentProfileResponse.ok && currentProfileData.user) {
+        savedProfile = currentProfileData.user as AuthUser;
+        confirmedDegree = typeof savedProfile.degree === "string" ? savedProfile.degree : "";
+        savedSemester = Number(savedProfile.semester);
+      }
+    }
+
+    if (
+      confirmedDegree.trim().toUpperCase() !== selectedDegree
+      || !Number.isInteger(savedSemester)
+      || savedSemester !== Number(semester)
+    ) {
+      throw new Error(
+        `Your profile still shows ${confirmedDegree || "no degree"}, semester ${
+          Number.isInteger(savedSemester) ? savedSemester : "not set"
+        }. The selected program and semester were not confirmed as saved.`,
+      );
+    }
+    savedProfile.degree = confirmedDegree;
+    savedProfile.semester = savedSemester;
+    setStudentDegree(savedProfile.degree ?? "");
+    setSemester(String(savedSemester));
+    setCohortLocked(true);
+    localStorage.setItem("codexa_user", JSON.stringify(savedProfile));
+    setUser(savedProfile);
+    window.dispatchEvent(new CustomEvent("codexa:user-updated", { detail: savedProfile }));
+    setCohortSaveSuccess("Your program and semester have been saved.");
+  };
+
+  const handleSaveStudentCohort = async () => {
+    setSavingCohort(true);
+    setCohortSaveError(null);
+    setCohortSaveSuccess(null);
+    try {
+      await saveStudentCohort();
+    } catch (saveError) {
+      setCohortSaveError(
+        saveError instanceof Error ? saveError.message : "Unable to save your program and semester.",
+      );
+    } finally {
+      setSavingCohort(false);
+    }
   };
 
   const handleSave = async () => {
@@ -473,9 +577,68 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
                     {role === "student" ? (
                       <div className={`${controlClass} grid gap-4 sm:grid-cols-2`}>
                         <ReadOnlyValue label="Student ID" value={user?.student_id} />
-                        <ReadOnlyValue label="Department / degree" value={user?.department ?? user?.degree} />
-                        <ReadOnlyValue label="Semester" value={user?.semester} />
-                        <p className="text-xs text-muted-foreground sm:col-span-2">Student ID, email, degree, and semester are read-only here.</p>
+                        <div>
+                          <label className={fieldLabelClass} htmlFor="settings-student-degree">Degree / department</label>
+                          <select
+                            id="settings-student-degree"
+                            value={studentDegree}
+                            disabled={cohortLocked}
+                            onChange={(event) => {
+                              setStudentDegree(event.target.value);
+                              setCohortSaveError(null);
+                              setCohortSaveSuccess(null);
+                            }}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            <option value="">Select your program</option>
+                            {STUDENT_PROGRAMS.map((program) => (
+                              <option key={program.value} value={program.value}>{program.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className={fieldLabelClass} htmlFor="settings-semester">Current semester</label>
+                          <select
+                            id="settings-semester"
+                            value={semester}
+                            disabled={cohortLocked}
+                            onChange={(event) => {
+                              setSemester(event.target.value);
+                              setCohortSaveError(null);
+                              setCohortSaveSuccess(null);
+                            }}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            <option value="">Select your semester</option>
+                            {STUDENT_SEMESTERS.map((value) => (
+                              <option key={value} value={value}>Semester {value}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <p className="text-xs text-muted-foreground sm:col-span-2">
+                          {cohortLocked
+                            ? "Your program and semester are saved and locked for your account."
+                            : "Set your degree and current semester so the dashboard only shows courses for your cohort."}
+                        </p>
+                        <div className="sm:col-span-2">
+                          {!cohortLocked && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void handleSaveStudentCohort()}
+                              disabled={loading || saving || savingCohort || !studentDegree || !semester}
+                            >
+                              {savingCohort && <Loader className="h-4 w-4 animate-spin" />}
+                              Save program and semester
+                            </Button>
+                          )}
+                          {cohortSaveError && (
+                            <p role="alert" className="mt-2 text-sm text-destructive">{cohortSaveError}</p>
+                          )}
+                          {cohortSaveSuccess && (
+                            <p role="status" className="mt-2 text-sm text-accent">{cohortSaveSuccess}</p>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -500,11 +663,10 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
                 {section === "appearance" && (
                   <>
                     <SectionHeading title="Appearance" description="Choose how Codexa looks on this device." />
-                    <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
                       {([
                         { value: "light", label: "Light", Icon: Sun },
                         { value: "dark", label: "Dark", Icon: Moon },
-                        { value: "system", label: "System", Icon: Monitor },
                       ] as const).map(({ value, label, Icon }) => (
                         <button key={value} type="button" aria-pressed={settings.appearance.theme === value} onClick={() => setTheme(value)} className={`${controlClass} flex items-center gap-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${settings.appearance.theme === value ? "border-primary bg-primary/5 text-foreground ring-1 ring-primary" : "text-muted-foreground hover:bg-muted"}`}>
                           <Icon className="h-5 w-5" /> {label} mode
@@ -709,9 +871,9 @@ const AccountSettingsDialog = ({ open, onOpenChange, role }: AccountSettingsDial
         <div className="flex items-center justify-between gap-3 border-t border-border bg-card/60 px-4 py-3 sm:px-6">
           <p className="hidden text-xs text-muted-foreground sm:block">Settings are saved to your Codexa account.</p>
           <div className="ml-auto flex gap-2">
-            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={saving || changingPassword}>Close</Button>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={saving || savingCohort || changingPassword}>Close</Button>
             {!["security", "support"].includes(section) && (
-              <Button type="button" onClick={handleSave} disabled={loading || saving}>
+              <Button type="button" onClick={handleSave} disabled={loading || saving || savingCohort}>
                 {saving ? <Loader className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Save changes
               </Button>

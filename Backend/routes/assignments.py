@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from pymongo import MongoClient
+from pymongo import ReturnDocument
 from bson import ObjectId
 import re
 from models.assignment import Assignment
@@ -11,6 +12,57 @@ assignments_bp = Blueprint('assignments', __name__)
 client = MongoClient(Config.MONGO_URI)
 db = client['lms_db']
 assignment_model = Assignment(db)
+
+def _find_owned_class(class_id, teacher_id):
+    class_ids = [class_id]
+    if ObjectId.is_valid(class_id):
+        class_ids.append(ObjectId(class_id))
+    if class_id.isdigit():
+        class_ids.append(int(class_id))
+    return db['classes'].find_one({
+        '_id': {'$in': class_ids},
+        'teacher_id': teacher_id,
+    })
+
+
+def _next_assignment_number(class_id):
+    existing_count = assignment_model.collection.count_documents({'course': class_id})
+    counter = db['assignment_counters'].find_one({'_id': class_id})
+    last_number = counter.get('last_number', 0) if counter else 0
+    return max(existing_count, last_number) + 1
+
+
+def _reserve_assignment_number(class_id):
+    existing_count = assignment_model.collection.count_documents({'course': class_id})
+    counter = db['assignment_counters'].find_one_and_update(
+        {'_id': class_id},
+        [{
+            '$set': {
+                'last_number': {
+                    '$add': [
+                        {'$max': [{'$ifNull': ['$last_number', 0]}, existing_count]},
+                        1,
+                    ],
+                },
+            },
+        }],
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+    return counter['last_number']
+
+
+def _populate_legacy_assignment_numbers(assignments):
+    assignments.sort(key=lambda item: (
+        str(item.get('created_at') or ''),
+        str(item.get('_id') or ''),
+    ))
+    next_by_course = {}
+    for assignment in assignments:
+        course = str(assignment.get('course', ''))
+        next_number = next_by_course.get(course, 1)
+        assignment['assignment_number'] = assignment.get('assignment_number') or next_number
+        next_by_course[course] = max(next_number, assignment['assignment_number'] + 1)
 
 
 @assignments_bp.route('/', methods=['POST'])
@@ -30,27 +82,33 @@ def create_assignment():
     if not all(isinstance(value, str) for value in (title, description, class_id, deadline)):
         return jsonify({'error': 'Assignment fields must be strings'}), 400
 
-    class_ids = [class_id]
-    if ObjectId.is_valid(class_id):
-        class_ids.append(ObjectId(class_id))
-    if class_id.isdigit():
-        class_ids.append(int(class_id))
-
-    class_record = db['classes'].find_one({
-        '_id': {'$in': class_ids},
-        'teacher_id': request.user_id,
-    })
+    class_record = _find_owned_class(class_id, request.user_id)
     if not class_record:
         return jsonify({'error': 'Class not found or you do not own this class'}), 404
 
+    assignment_number = _reserve_assignment_number(class_id)
     assignment_id = assignment_model.create_assignment(
-        title.strip(), description.strip(), class_id, request.user_id, deadline
+        title.strip(),
+        description.strip(),
+        class_id,
+        request.user_id,
+        deadline,
+        assignment_number,
     )
     return jsonify({
         'message': 'Assignment created',
         'assignment_id': assignment_id,
         'class_id': class_id,
+        'assignment_number': assignment_number,
     }), 201
+
+
+@assignments_bp.route('/classes/<class_id>/next-number', methods=['GET'])
+@role_required('teacher')
+def get_next_assignment_number(class_id):
+    if _find_owned_class(class_id, request.user_id) is None:
+        return jsonify({'error': 'Class not found or you do not own this class'}), 404
+    return jsonify({'assignment_number': _next_assignment_number(class_id)}), 200
 
 
 @assignments_bp.route('/', methods=['GET'])
@@ -109,6 +167,7 @@ def get_assignments():
             for item in submissions
         }
 
+    _populate_legacy_assignment_numbers(assignments)
     serialized_assignments = []
     for assignment in assignments:
         class_id = str(assignment.get('course', ''))
@@ -116,6 +175,7 @@ def get_assignments():
         serialized = {
             'id': str(assignment['_id']),
             'title': assignment.get('title', ''),
+            'assignment_number': assignment['assignment_number'],
             'description': assignment.get('description', ''),
             'course': class_labels.get(class_id, class_id) if request.user_role == 'student' else class_id,
             'deadline': deadline.isoformat() if hasattr(deadline, 'isoformat') else deadline,

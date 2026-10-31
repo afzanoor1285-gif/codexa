@@ -12,11 +12,11 @@ export interface AuthUser {
   name?: string | null;
   degree?: string | null;
   bio?: string;
-  theme?: "light" | "dark" | "system";
+  theme?: "light" | "dark";
   student_id?: string | null;
   department?: string | null;
   designation?: string | null;
-  semester?: string | null;
+  semester?: number | null;
   settings?: Record<string, unknown>;
 }
 

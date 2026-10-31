@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { getToken, getUser, logout } from "@/lib/auth";
 import {
   FileCode,
+  BookOpen,
   CheckCircle2,
   Clock,
   Upload,
@@ -36,6 +37,7 @@ import MobileNavigation from "@/components/MobileNavigation";
 
 interface Assignment {
   id: string;
+  assignmentNumber?: number;
   name: string;
   description: string;
   course: string;
@@ -72,7 +74,6 @@ const StudentDashboard = () => {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-
   useEffect(() => {
     const updateUser = (event: Event) => {
       const updatedUser = (event as CustomEvent<ReturnType<typeof getUser>>).detail;
@@ -108,6 +109,7 @@ const StudentDashboard = () => {
         const assignmentRecords = new Map<string, {
             id: string;
             title: string;
+            assignment_number?: number;
             description: string;
             course: string;
             deadline: string;
@@ -130,6 +132,7 @@ const StudentDashboard = () => {
             ...grade,
             id: grade.assignmentId,
             title: grade.title || existing?.title || "Assignment",
+            assignment_number: grade.assignment_number ?? existing?.assignment_number,
             description: grade.description || existing?.description || "",
             course: grade.course || existing?.course || "",
             deadline: grade.deadline || existing?.deadline || "",
@@ -137,6 +140,7 @@ const StudentDashboard = () => {
         }
         const loadedAssignments = [...assignmentRecords.values()].map((assignment) => ({
             id: assignment.id,
+            assignmentNumber: assignment.assignment_number,
             name: assignment.title,
             description: assignment.description,
             course: assignment.course,
@@ -349,6 +353,7 @@ const StudentDashboard = () => {
             { icon: FileCode, label: "My Assignments", active: false },
             { icon: Upload, label: "Submit Code", active: false, href: "/student/submit" },
             { icon: Award, label: "Grades", active: false },
+            { icon: BookOpen, label: "My Courses", active: false, href: "/student/courses" },
             { icon: Settings, label: "Settings", active: false },
           ].map((item) => (
             item.href ? (
@@ -406,6 +411,7 @@ const StudentDashboard = () => {
               { label: "My Assignments", icon: FileCode, href: "/student/dashboard#my-assignments" },
               { label: "Submit Code", icon: Upload, href: "/student/submit" },
               { label: "Grades and Progress", icon: Award, href: "/student/dashboard#your-progress" },
+              { label: "My Courses", icon: BookOpen, href: "/student/courses" },
               { label: "Settings", icon: Settings, onSelect: () => setSettingsOpen(true) },
               { label: "Sign Out", icon: LogOut, href: "/", onSelect: logout },
             ]}
@@ -494,11 +500,15 @@ const StudentDashboard = () => {
                           : "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
                       }`}
                     >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-1">
-                          <p className="font-medium text-foreground">{assignment.name}</p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          {assignment.assignmentNumber && (
+                            <span className="inline-flex shrink-0 whitespace-nowrap rounded-md border border-secondary/20 bg-secondary/10 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-secondary">
+                              Assignment {assignment.assignmentNumber}
+                            </span>
+                          )}
+                          <span className={`inline-flex shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
                             assignment.status === "graded" || assignment.status === "submitted" ? "bg-accent/10 text-accent" :
                             assignment.status === "pending" ? "bg-yellow-500/10 text-yellow-600" :
                             "bg-muted text-muted-foreground"
@@ -508,10 +518,11 @@ const StudentDashboard = () => {
                              assignment.status === "pending" ? "Pending" : "Not Submitted"}
                           </span>
                         </div>
-                        <p className="text-sm text-muted-foreground">{assignment.course}</p>
+                        <p className="break-words font-medium text-foreground">{assignment.name}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{assignment.course}</p>
                         <p className="mt-1 text-sm text-muted-foreground">{assignment.description}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="shrink-0 text-left sm:max-w-40 sm:text-right">
                         {assignment.score !== null ? (
                           <>
                             <p className="text-lg font-bold text-foreground">{assignment.score}/{assignment.maxScore}</p>

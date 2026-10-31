@@ -6,13 +6,22 @@ class Assignment:
     def __init__(self, db: Collection):
         self.collection = db['assignments']
 
-    def create_assignment(self, title: str, description: str, course: str, teacher_id: str, deadline: str):
+    def create_assignment(
+        self,
+        title: str,
+        description: str,
+        course: str,
+        teacher_id: str,
+        deadline: str,
+        assignment_number: int,
+    ):
         assignment_doc = {
             'title': title,
             'description': description,
             'course': course,
             'teacher_id': teacher_id,
             'deadline': deadline,
+            'assignment_number': assignment_number,
             'created_at': datetime.utcnow()
         }
         result = self.collection.insert_one(assignment_doc)

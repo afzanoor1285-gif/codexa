@@ -3,7 +3,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from bson import ObjectId
 from config import Config
-from routes.auth import auth_bp, role_required
+from routes.auth import STUDENT_DEGREES, auth_bp, role_required
 from routes.assignments import assignments_bp
 from routes.submissions import submissions_bp
 from models.submission import Submission
@@ -139,38 +139,68 @@ def get_students():
         student['email'].strip().lower(): {
             'name': student.get('name') or student['email'],
             'email': student['email'].strip().lower(),
+            'degree': student.get('degree'),
+            'semester': student.get('semester'),
         }
         for student in students_collection.find(
             {'email': {'$type': 'string'}},
-            {'_id': 0, 'name': 1, 'email': 1},
+            {'_id': 0, 'name': 1, 'email': 1, 'degree': 1, 'semester': 1},
         )
     }
     registered_students = db['users'].find(
         {'role': 'student', 'email': {'$type': 'string'}},
-        {'_id': 0, 'name': 1, 'email': 1},
+        {'_id': 0, 'name': 1, 'email': 1, 'degree': 1, 'semester': 1},
     )
     for student in registered_students:
         email = student['email'].strip().lower()
         students_by_email[email] = {
             'name': student.get('name') or email,
             'email': email,
+            'degree': student.get('degree'),
+            'semester': student.get('semester'),
         }
 
     students = sorted(students_by_email.values(), key=lambda student: student['name'].lower())
     return jsonify({"students": students})
+
+def create_course_invitation_notification(email, class_id, class_record, teacher_name):
+    db['notifications'].insert_one({
+        'recipient_email': email,
+        'type': 'course_invitation',
+        'title': 'Course registration requested',
+        'message': f"{teacher_name} invited you to register for {class_record.get('name', 'a course')} ({class_record.get('code', '')}).",
+        'course_id': class_id,
+        'course_name': class_record.get('name', ''),
+        'teacher_name': teacher_name,
+        'created_at': datetime.utcnow(),
+        'read': False,
+    })
 
 @app.route('/api/students', methods=['POST'])
 @role_required('teacher')
 def add_student():
     if db is None:
         return jsonify({"error": "Database not connected"}), 500
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid request body"}), 400
     name = data.get('name')
     email = data.get('email')
-    if not name or not email:
-        return jsonify({"error": "Name and email required"}), 400
+    degree = data.get('degree')
+    if not isinstance(name, str) or not name.strip() or not isinstance(email, str) or not email.strip():
+        return jsonify({"error": "Name and email are required"}), 400
+    semester = data.get('semester')
+    if not isinstance(degree, str) or degree not in STUDENT_DEGREES:
+        return jsonify({"error": "A valid student program is required"}), 400
+    if type(semester) is not int or semester not in range(1, 9):
+        return jsonify({"error": "Select a semester from 1 to 8"}), 400
     students_collection = db['students']
-    students_collection.insert_one({"name": name, "email": email})
+    students_collection.insert_one({
+        "name": name.strip(),
+        "email": email.strip().lower(),
+        "degree": degree,
+        "semester": semester,
+    })
     print(f"Added student: {name}, {email}")
     return jsonify({"message": "Student added"}), 201
 
@@ -361,8 +391,15 @@ def get_student_grades():
         str(assignment['_id']): assignment
         for assignment in db['assignments'].find(
             {'_id': {'$in': [ObjectId(assignment_id) for assignment_id in assignment_ids]}},
-            {'_id': 1, 'title': 1, 'description': 1, 'course': 1, 'deadline': 1},
-        )
+        {
+            '_id': 1,
+            'title': 1,
+            'description': 1,
+            'course': 1,
+            'deadline': 1,
+            'assignment_number': 1,
+        },
+    )
     }
 
     grades = []
@@ -376,6 +413,7 @@ def get_student_grades():
             'title': assignment.get('title') or record.get('assignmentTitle', 'Assignment'),
             'description': assignment.get('description', ''),
             'course': str(assignment.get('course', '')),
+            'assignment_number': assignment.get('assignment_number'),
             'deadline': (
                 assignment['deadline'].isoformat()
                 if hasattr(assignment.get('deadline'), 'isoformat')
@@ -640,8 +678,158 @@ def get_classes():
             if isinstance(cls.get('student_emails'), list)
             else cls.get('student_count', 0)
         )
+        cls['invitedCount'] = (
+            len(cls['invited_emails'])
+            if isinstance(cls.get('invited_emails'), list)
+            else 0
+        )
 
     return jsonify({"classes": classes}), 200
+
+@app.route('/api/student/classes', methods=['GET'])
+@role_required('student')
+def get_student_classes():
+    if db is None:
+        return jsonify({"error": "Database not connected"}), 500
+    degree = request.current_user.get('degree')
+    semester = request.current_user.get('semester')
+    if not degree or type(semester) is not int:
+        return jsonify({"error": "Add your degree and semester in profile settings to find classes"}), 400
+
+    email = request.current_user.get('email', '').strip().lower()
+    classes = list(db['classes'].find(
+        {'degree': degree, 'semester': semester},
+        {'name': 1, 'code': 1, 'section': 1, 'degree': 1, 'semester': 1,
+         'teacher_id': 1, 'student_emails': 1, 'invited_emails': 1},
+    ))
+    result = []
+    for class_record in classes:
+        teacher_id = class_record.get('teacher_id', '')
+        teacher = None
+        if isinstance(teacher_id, str) and ObjectId.is_valid(teacher_id):
+            teacher = db['users'].find_one(
+                {'_id': ObjectId(teacher_id)},
+                {'_id': 0, 'name': 1},
+            )
+        class_record['id'] = str(class_record.pop('_id'))
+        class_record['teacherName'] = (
+            teacher.get('name') if teacher else None
+        ) or 'Teacher'
+        enrolled_emails = class_record.get('student_emails', [])
+        if not isinstance(enrolled_emails, list):
+            enrolled_emails = []
+        class_record['enrolled'] = any(
+            isinstance(student_email, str) and student_email.strip().lower() == email
+            for student_email in enrolled_emails
+        )
+        invited_emails = class_record.get('invited_emails', [])
+        if not isinstance(invited_emails, list):
+            invited_emails = []
+        class_record['invited'] = any(
+            isinstance(student_email, str) and student_email.strip().lower() == email
+            for student_email in invited_emails
+        )
+        class_record.pop('student_emails', None)
+        class_record.pop('invited_emails', None)
+        class_record.pop('teacher_id', None)
+        result.append(class_record)
+
+    return jsonify({'classes': result}), 200
+
+@app.route('/api/student/notifications', methods=['GET'])
+@role_required('student')
+def get_student_notifications():
+    if db is None:
+        return jsonify({"error": "Database not connected"}), 500
+    email = request.current_user.get('email', '').strip().lower()
+    notifications = list(db['notifications'].find(
+        {
+            'recipient_email': email,
+            'type': 'course_invitation',
+            'read': {'$ne': True},
+        },
+    ).sort('created_at', -1).limit(50))
+    for notification in notifications:
+        notification['id'] = str(notification.pop('_id'))
+        created_at = notification.get('created_at')
+        notification['created_at'] = (
+            created_at.isoformat()
+            if hasattr(created_at, 'isoformat')
+            else created_at
+        )
+    return jsonify({'notifications': notifications}), 200
+
+@app.route('/api/student/notifications/<notification_id>/read', methods=['POST'])
+@role_required('student')
+def mark_student_notification_read(notification_id):
+    if db is None:
+        return jsonify({"error": "Database not connected"}), 500
+    if not ObjectId.is_valid(notification_id):
+        return jsonify({"error": "Notification not found"}), 404
+    result = db['notifications'].update_one(
+        {
+            '_id': ObjectId(notification_id),
+            'recipient_email': request.current_user.get('email', '').strip().lower(),
+        },
+        {'$set': {'read': True}},
+    )
+    if result.matched_count != 1:
+        return jsonify({"error": "Notification not found"}), 404
+    return jsonify({'message': 'Notification marked as read'}), 200
+
+@app.route('/api/classes/<class_id>/enroll', methods=['POST'])
+@role_required('student')
+def enroll_in_class(class_id):
+    if db is None:
+        return jsonify({"error": "Database not connected"}), 500
+    if not ObjectId.is_valid(class_id):
+        return jsonify({"error": "Class not found"}), 404
+
+    student = request.current_user
+    if not student.get('degree') or type(student.get('semester')) is not int:
+        return jsonify({"error": "Add your degree and semester in profile settings before enrolling"}), 400
+
+    classes_collection = db['classes']
+    class_record = classes_collection.find_one({'_id': ObjectId(class_id)})
+    if not class_record:
+        return jsonify({"error": "Class not found"}), 404
+    if (
+        class_record.get('degree') != student.get('degree')
+        or class_record.get('semester') != student.get('semester')
+    ):
+        return jsonify({"error": "This class is not for your degree and semester"}), 403
+
+    email = student.get('email', '').strip().lower()
+    existing_emails = class_record.get('student_emails', [])
+    if not isinstance(existing_emails, list):
+        existing_emails = []
+    if any(
+        isinstance(enrolled_email, str) and enrolled_email.strip().lower() == email
+        for enrolled_email in existing_emails
+    ):
+        return jsonify({'message': 'You are already enrolled in this class'}), 200
+
+    enrollment_result = classes_collection.update_one(
+        {'_id': ObjectId(class_id)},
+        {'$addToSet': {'student_emails': email}},
+    )
+    if enrollment_result.matched_count != 1:
+        return jsonify({"error": "Class not found"}), 404
+    db['notifications'].update_many(
+        {
+            'recipient_email': email,
+            'course_id': class_id,
+            'type': 'course_invitation',
+        },
+        {'$set': {'read': True}},
+    )
+    return jsonify({
+        'message': 'You are enrolled in this class',
+        'class': {
+            'id': class_id,
+            'name': class_record.get('name'),
+        },
+    }), 200
 
 @app.route('/api/classes', methods=['POST'])
 @role_required('teacher')
@@ -656,10 +844,18 @@ def create_class():
     name = data.get('name')
     code = data.get('code')
     section = data.get('section')
-    student_emails = data.get('student_emails', [])
+    degree = data.get('degree')
+    semester = data.get('semester')
+    student_emails = data.get('invited_emails', data.get('student_emails', []))
 
     if not all(isinstance(value, str) and value.strip() for value in (name, code, section)):
         return jsonify({"error": "Class name, code, and section are required"}), 400
+    if not isinstance(degree, str) or (
+        degree not in STUDENT_DEGREES and degree != 'UNSPECIFIED'
+    ):
+        return jsonify({"error": "A valid class program is required"}), 400
+    if type(semester) is not int or semester not in range(1, 9):
+        return jsonify({"error": "Select a semester from 1 to 8"}), 400
     if not isinstance(student_emails, list) or any(
         not isinstance(email, str) or not email.strip()
         for email in student_emails
@@ -674,43 +870,191 @@ def create_class():
     }):
         return jsonify({"error": "You already have a class with this code"}), 409
 
-    known_emails = {
-        student['email'].strip().lower()
+    available_students = {
+        student['email'].strip().lower(): (
+            student.get('degree'),
+            student.get('semester'),
+        )
         for student in db['students'].find(
             {'email': {'$type': 'string'}},
-            {'_id': 0, 'email': 1},
+            {'_id': 0, 'email': 1, 'degree': 1, 'semester': 1},
         )
     }
-    known_emails.update(
-        student['email'].strip().lower()
-        for student in db['users'].find(
-            {'role': 'student', 'email': {'$type': 'string'}},
-            {'_id': 0, 'email': 1},
-        )
+    available_students.update(
+        {
+            student['email'].strip().lower(): (
+                student.get('degree'),
+                student.get('semester'),
+            )
+            for student in db['users'].find(
+                {'role': 'student', 'email': {'$type': 'string'}},
+                {'_id': 0, 'email': 1, 'degree': 1, 'semester': 1},
+            )
+        }
     )
-    if any(email not in known_emails for email in normalized_emails):
+    if any(email not in available_students for email in normalized_emails):
         return jsonify({"error": "One or more selected students are no longer available"}), 400
+    if any(
+        (
+            available_students[email][0] or 'UNSPECIFIED',
+            available_students[email][1],
+        ) != (degree, semester)
+        for email in normalized_emails
+    ):
+        return jsonify({"error": "All selected students must match the class program and semester"}), 400
 
     class_record = {
         'name': name.strip(),
         'code': code.strip(),
         'section': section.strip(),
+        'degree': degree,
+        'semester': semester,
         'teacher_id': request.user_id,
-        'student_emails': normalized_emails,
-        'student_count': len(normalized_emails),
+        'student_emails': [],
+        'invited_emails': normalized_emails,
+        'student_count': 0,
     }
     result = classes_collection.insert_one(class_record)
+    class_id = str(result.inserted_id)
+    teacher = db['users'].find_one(
+        {'_id': ObjectId(request.user_id)} if ObjectId.is_valid(request.user_id) else {'_id': request.user_id},
+        {'name': 1},
+    )
+    teacher_name = (teacher.get('name') if teacher else None) or 'Your teacher'
+    for email in normalized_emails:
+        create_course_invitation_notification(email, class_id, class_record, teacher_name)
 
     return jsonify({
         'message': 'Class created',
         'class': {
-            'id': str(result.inserted_id),
+            'id': class_id,
             'name': class_record['name'],
             'code': class_record['code'],
             'section': class_record['section'],
+            'degree': class_record['degree'],
+            'semester': class_record['semester'],
             'studentCount': class_record['student_count'],
+            'invitedCount': len(normalized_emails),
         },
     }), 201
+
+@app.route('/api/classes/<class_id>/students', methods=['POST'])
+@role_required('teacher')
+def add_students_to_class(class_id):
+    if db is None:
+        return jsonify({"error": "Database not connected"}), 500
+    if not ObjectId.is_valid(class_id):
+        return jsonify({"error": "Class not found"}), 404
+
+    classes_collection = db['classes']
+    class_record = classes_collection.find_one({
+        '_id': ObjectId(class_id),
+        'teacher_id': request.user_id,
+    })
+    if not class_record:
+        return jsonify({"error": "Class not found"}), 404
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid request body"}), 400
+    student_emails = data.get('invited_emails', data.get('student_emails'))
+    if not isinstance(student_emails, list) or not student_emails or any(
+        not isinstance(email, str) or not email.strip()
+        for email in student_emails
+    ):
+        return jsonify({"error": "Select at least one valid student"}), 400
+
+    normalized_emails = list(dict.fromkeys(email.strip().lower() for email in student_emails))
+    available_students = {
+        student['email'].strip().lower(): (
+            student.get('degree') or 'UNSPECIFIED',
+            student.get('semester'),
+        )
+        for student in db['students'].find(
+            {'email': {'$type': 'string'}},
+            {'_id': 0, 'email': 1, 'degree': 1, 'semester': 1},
+        )
+    }
+    available_students.update({
+        student['email'].strip().lower(): (
+            student.get('degree') or 'UNSPECIFIED',
+            student.get('semester'),
+        )
+        for student in db['users'].find(
+            {'role': 'student', 'email': {'$type': 'string'}},
+            {'_id': 0, 'email': 1, 'degree': 1, 'semester': 1},
+        )
+    })
+    if any(email not in available_students for email in normalized_emails):
+        return jsonify({"error": "One or more selected students are no longer available"}), 400
+    if any(
+        available_students[email] != (
+            class_record.get('degree') or 'UNSPECIFIED',
+            class_record.get('semester'),
+        )
+        for email in normalized_emails
+    ):
+        return jsonify({"error": "Students must match this class program and semester"}), 400
+
+    existing_emails = class_record.get('invited_emails', [])
+    enrolled_emails = class_record.get('student_emails', [])
+    if not isinstance(existing_emails, list):
+        existing_emails = []
+    if not isinstance(enrolled_emails, list):
+        enrolled_emails = []
+    existing_normalized = {
+        email.strip().lower()
+        for email in existing_emails + enrolled_emails
+        if isinstance(email, str)
+    }
+    new_emails = [
+        email for email in normalized_emails
+        if email not in existing_normalized
+    ]
+    if new_emails:
+        classes_collection.update_one(
+            {'_id': ObjectId(class_id), 'teacher_id': request.user_id},
+            {'$addToSet': {'invited_emails': {'$each': new_emails}}},
+        )
+        teacher = db['users'].find_one(
+            {'_id': ObjectId(request.user_id)} if ObjectId.is_valid(request.user_id) else {'_id': request.user_id},
+            {'name': 1},
+        )
+        teacher_name = (teacher.get('name') if teacher else None) or 'Your teacher'
+        for email in new_emails:
+            create_course_invitation_notification(email, class_id, class_record, teacher_name)
+
+    updated_class = classes_collection.find_one(
+        {'_id': ObjectId(class_id), 'teacher_id': request.user_id},
+        {'student_emails': 1, 'invited_emails': 1},
+    )
+    if not updated_class:
+        return jsonify({"error": "Class not found"}), 404
+    return jsonify({
+        'message': 'Course registration invitation sent' if new_emails else 'Selected students were already invited',
+        'student_emails': updated_class.get('student_emails', []),
+        'invited_emails': updated_class.get('invited_emails', []),
+        'invited_count': len(new_emails),
+    }), 200
+
+@app.route('/api/classes/<class_id>', methods=['DELETE'])
+@role_required('teacher')
+def delete_class(class_id):
+    if db is None:
+        return jsonify({"error": "Database not connected"}), 500
+    if not ObjectId.is_valid(class_id):
+        return jsonify({"error": "Class not found"}), 404
+
+    result = db['classes'].delete_one({
+        '_id': ObjectId(class_id),
+        'teacher_id': request.user_id,
+    })
+    if result.deleted_count != 1:
+        return jsonify({"error": "Class not found"}), 404
+
+    return jsonify({
+        "message": "Class deleted. Existing assignment and submission records were kept.",
+    }), 200
 
 @app.route('/api/classes/<class_id>/assignments', methods=['GET'])
 @role_required('teacher')
@@ -737,17 +1081,23 @@ def get_class_assignments(class_id):
     
     assignments_collection = db['assignments']
     assignments = list(assignments_collection.find({'course': class_id}))
+    assignments.sort(key=lambda assignment: (
+        str(assignment.get('created_at') or ''),
+        str(assignment.get('_id') or ''),
+    ))
+    for index, assignment in enumerate(assignments, start=1):
+        assignment['assignment_number'] = assignment.get('assignment_number') or index
 
     # Convert database fields to the shape expected by the existing class page.
+    total_students = (
+        len(cls['student_emails'])
+        if isinstance(cls.get('student_emails'), list)
+        else cls.get('student_count', 0)
+    )
     for assignment in assignments:
         assignment['_id'] = str(assignment['_id'])
         assignment['id'] = assignment['_id']
         assignment['createdAt'] = assignment.get('created_at')
-        total_students = (
-            len(cls['student_emails'])
-            if isinstance(cls.get('student_emails'), list)
-            else cls.get('student_count', 0)
-        )
         submitted_students = db['submissions'].count_documents({
             'assignment_id': assignment['id'],
         })
@@ -763,7 +1113,11 @@ def get_class_assignments(class_id):
             "name": cls.get('name'),
             "code": cls.get('code'),
             "section": cls.get('section'),
-            "studentCount": total_students
+            "studentCount": total_students,
+            "degree": cls.get('degree'),
+            "semester": cls.get('semester'),
+            "studentEmails": cls.get('student_emails', []),
+            "invitedEmails": cls.get('invited_emails', []),
         },
         "assignments": assignments
     }), 200

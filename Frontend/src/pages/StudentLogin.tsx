@@ -1,43 +1,38 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail, Lock, ArrowRight, GraduationCap } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
+import { STUDENT_PROGRAMS, STUDENT_SEMESTERS } from "@/lib/student-programs";
 
 const StudentLogin = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParams] = useSearchParams();
+  const inviteClassId = searchParams.get("join");
+  const [isLogin, setIsLogin] = useState(!inviteClassId || searchParams.get("register") !== "1");
   const [name, setName] = useState("");
-  const [degree, setDegree] = useState("");
+  const [degree, setDegree] = useState(searchParams.get("degree") || "");
+  const [semester, setSemester] = useState(searchParams.get("semester") || "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState({ name: "", degree: "", email: "", password: "" });
+  const [fieldErrors, setFieldErrors] = useState({ name: "", degree: "", semester: "", email: "", password: "" });
   const navigate = useNavigate();
   const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000";
-  const degreeOptions = [
-    { value: "BSCS", label: "BCS / BS Computer Science" },
-    { value: "BSAI", label: "BS Artificial Intelligence (AI)" },
-    { value: "BSSE", label: "BS Software Engineering (BSSE)" },
-    { value: "BSIT", label: "BS Information Technology (BSIT)" },
-    { value: "BSDS", label: "BS Data Science" },
-    { value: "BSCY", label: "BS Cyber Security" },
-    { value: "BSCE", label: "BS Computer Engineering" },
-    { value: "BEE", label: "BS Electrical Engineering (BEE)" },
-    { value: "BSEE", label: "BS Electronics Engineering" },
-    { value: "BSTE", label: "BS Telecom Engineering" },
-    { value: "BSCSE", label: "BS Computer Systems Engineering" },
-    { value: "OTHER", label: "Other" },
-  ];
+  const switchAuthMode = (loginMode: boolean) => {
+    setIsLogin(loginMode);
+    setError("");
+    setFieldErrors({ name: "", degree: "", semester: "", email: "", password: "" });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setFieldErrors({ name: "", degree: "", email: "", password: "" });
+    setFieldErrors({ name: "", degree: "", semester: "", email: "", password: "" });
 
-    const nextErrors = { name: "", degree: "", email: "", password: "" };
+    const nextErrors = { name: "", degree: "", semester: "", email: "", password: "" };
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!email.trim()) {
@@ -55,7 +50,13 @@ const StudentLogin = () => {
     if (!isLogin && !name.trim()) {
       nextErrors.name = "Full name is required.";
     }
-    if (nextErrors.name || nextErrors.degree || nextErrors.email || nextErrors.password) {
+    if (!isLogin && !degree) {
+      nextErrors.degree = "Please select your degree / department.";
+    }
+    if (!isLogin && !semester) {
+      nextErrors.semester = "Please select your current semester.";
+    }
+    if (nextErrors.name || nextErrors.degree || nextErrors.semester || nextErrors.email || nextErrors.password) {
       setFieldErrors(nextErrors);
       return;
     }
@@ -63,7 +64,7 @@ const StudentLogin = () => {
     setLoading(true);
     try {
       const endpoint = isLogin ? "/login" : "/signup";
-      const body: { email: string; password: string; role: "student"; name?: string; degree?: string } = {
+      const body: { email: string; password: string; role: "student"; name?: string; degree?: string; semester?: number } = {
         email: email.trim().toLowerCase(),
         password,
         role: "student", // Always send role so backend can validate
@@ -71,8 +72,9 @@ const StudentLogin = () => {
       if (!isLogin) {
         body.name = name.trim();
       }
-      if (!isLogin && degree) {
+      if (!isLogin) {
         body.degree = degree;
+        body.semester = Number(semester);
       }
 
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -83,7 +85,15 @@ const StudentLogin = () => {
 
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error || data.message || "Unable to submit form.");
+        const requestError = data.error || data.message || "Unable to submit form.";
+        if (!isLogin && requestError.toLowerCase().includes("already registered")) {
+          switchAuthMode(true);
+          setError(inviteClassId
+            ? "This email already has an account. Sign in to join the class."
+            : "This email already has an account. Sign in to continue.");
+          return;
+        }
+        setError(requestError);
         return;
       }
 
@@ -95,7 +105,25 @@ const StudentLogin = () => {
       localStorage.setItem("codexa_token", data.token);
       localStorage.setItem("codexa_user", JSON.stringify(data.user));
 
-      // Student should always go to Student Dashboard
+      if (inviteClassId) {
+        try {
+          const enrollmentResponse = await fetch(
+            `${API_BASE_URL}/api/classes/${encodeURIComponent(inviteClassId)}/enroll`,
+            {
+              method: "POST",
+              headers: { Authorization: `Bearer ${data.token}` },
+            },
+          );
+          const enrollmentData = await enrollmentResponse.json();
+          if (!enrollmentResponse.ok) {
+            navigate(`/student/courses?joinError=${encodeURIComponent(enrollmentData.error || "Unable to join this class.")}`);
+            return;
+          }
+        } catch {
+          navigate(`/student/courses?joinError=${encodeURIComponent("Your account is ready, but enrollment couldn't be completed. Try joining from My Courses.")}`);
+          return;
+        }
+      }
       navigate("/student/dashboard");
     } catch (err) {
       setError("Network error. Please try again.");
@@ -153,10 +181,39 @@ const StudentLogin = () => {
             </h1>
             <p className="text-muted-foreground">
               {isLogin
-                ? "Sign in with your student email and password. Department is not needed."
-                : "Create an account with the same email your teacher added to the class. Department is optional."}
+                ? "Sign in with your student email and 6-digit password."
+                : "Choose your program and semester so we can show you the right classes."}
             </p>
           </div>
+
+          {inviteClassId && (
+            <p className="mb-5 rounded-lg border border-secondary/20 bg-secondary/5 p-3 text-sm text-muted-foreground">
+              Your teacher invited you to a class. Sign in or create your account to join it.
+            </p>
+          )}
+
+          <div className="mb-6 grid grid-cols-2 rounded-lg bg-muted p-1" aria-label="Student account action">
+            {[{ login: true, label: "Sign in" }, { login: false, label: "Create account" }].map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                aria-pressed={isLogin === option.login}
+                onClick={() => switchAuthMode(option.login)}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  isLogin === option.login
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="mb-5 text-sm text-muted-foreground">
+            {isLogin
+              ? "New to Codexa? Choose Create account, then select your program and semester. Matching classes will appear on your dashboard."
+              : "After registration, matching classes will appear on your dashboard. Join the right class there."}
+          </p>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -195,19 +252,39 @@ const StudentLogin = () => {
 
             {!isLogin && (
               <div className="space-y-2">
-                <Label htmlFor="degree">Degree / Department (optional)</Label>
+                <Label htmlFor="degree">Degree / Department</Label>
                 <select
                   id="degree"
                   value={degree}
                   onChange={(e) => setDegree(e.target.value)}
                   className="h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
                 >
-                  <option value="">Choose later / not provided</option>
-                  {degreeOptions.map((option) => (
+                  <option value="">Select your program</option>
+                  {STUDENT_PROGRAMS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
                 {fieldErrors.degree && <p className="text-destructive text-sm">{fieldErrors.degree}</p>}
+              </div>
+            )}
+
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="semester">Current semester</Label>
+                <select
+                  id="semester"
+                  value={semester}
+                  onChange={(event) => setSemester(event.target.value)}
+                  className="h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="">Select your semester</option>
+                  {STUDENT_SEMESTERS.map((value) => (
+                    <option key={value} value={value}>Semester {value}</option>
+                  ))}
+                </select>
+                {fieldErrors.semester && <p className="text-destructive text-sm">{fieldErrors.semester}</p>}
               </div>
             )}
 
@@ -227,6 +304,7 @@ const StudentLogin = () => {
                   className="h-12 pl-12"
                   required
                 />
+                <p className="text-xs text-muted-foreground">Use exactly 6 numbers, for example 123456.</p>
                 {fieldErrors.password && <p className="text-destructive text-sm">{fieldErrors.password}</p>}
               </div>
             </div>
@@ -251,11 +329,7 @@ const StudentLogin = () => {
           <p className="text-center text-muted-foreground mt-6">
             {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
             <button
-              onClick={() => {
-                setIsLogin((current) => !current);
-                setError("");
-                setFieldErrors({ name: "", degree: "", email: "", password: "" });
-              }}
+              onClick={() => switchAuthMode(!isLogin)}
               className="text-secondary font-semibold hover:underline"
             >
               {isLogin ? "Sign up" : "Sign in"}

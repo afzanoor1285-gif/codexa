@@ -12,11 +12,14 @@ import {
   Bell,
   FileText,
   Loader,
+  UserPlus,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
+import { getStudentProgramLabel } from "@/lib/student-programs";
 
 interface Assignment {
   id: string;
+  assignment_number: number;
   title: string;
   description: string;
   deadline: string;
@@ -32,6 +35,17 @@ interface ClassData {
   code: string;
   section: string;
   studentCount: number;
+  degree: string;
+  semester: number;
+  studentEmails: string[];
+  invitedEmails: string[];
+}
+
+interface Student {
+  name: string;
+  email: string;
+  degree?: string | null;
+  semester?: number | null;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000";
@@ -46,6 +60,13 @@ const ClassDetail = () => {
   const [error, setError] = useState<string | null>(null);
   const [assignmentSort, setAssignmentSort] = useState<"newest" | "oldest" | "deadline">("newest");
   const [deadlineDisplay, setDeadlineDisplay] = useState<"date_time" | "date_only" | "relative">("date_time");
+  const [manageStudentsOpen, setManageStudentsOpen] = useState(false);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudentEmails, setSelectedStudentEmails] = useState<string[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
+  const [studentsMessage, setStudentsMessage] = useState<string | null>(null);
+  const [addStudentsLoading, setAddStudentsLoading] = useState(false);
 
   const fetchClassData = useCallback(async () => {
     try {
@@ -118,6 +139,77 @@ const ClassDetail = () => {
     navigate(`/teacher/create-assignment/${classId}`);
   };
 
+  const openStudentManager = async () => {
+    setManageStudentsOpen(true);
+    setStudentsError(null);
+    setStudentsMessage(null);
+    setStudentsLoading(true);
+    try {
+      const token = localStorage.getItem("codexa_token");
+      const response = await fetch(`${API_BASE_URL}/api/students`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load students.");
+      setStudents(data.students || []);
+    } catch (studentError) {
+      setStudentsError(studentError instanceof Error ? studentError.message : "Unable to load students.");
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+
+  const toggleStudentSelection = (email: string) => {
+    setSelectedStudentEmails((current) =>
+      current.includes(email)
+        ? current.filter((selectedEmail) => selectedEmail !== email)
+        : [...current, email],
+    );
+  };
+
+  const addStudentsToClass = async () => {
+    if (!classId || selectedStudentEmails.length === 0) return;
+    setAddStudentsLoading(true);
+    setStudentsError(null);
+    setStudentsMessage(null);
+    try {
+      const token = localStorage.getItem("codexa_token");
+      const response = await fetch(`${API_BASE_URL}/api/classes/${classId}/students`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({ invited_emails: selectedStudentEmails }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to add students.");
+      setClassData((current) => current
+        ? { ...current, invitedEmails: data.invited_emails, studentCount: data.student_emails.length }
+        : current);
+      setSelectedStudentEmails([]);
+      setStudentsMessage(data.message || "Students added to class.");
+    } catch (studentError) {
+      setStudentsError(studentError instanceof Error ? studentError.message : "Unable to add students.");
+    } finally {
+      setAddStudentsLoading(false);
+    }
+  };
+
+  const invitedEmails = new Set(
+    (classData?.invitedEmails || []).map((email) => email.toLowerCase()),
+  );
+  const enrolledEmails = new Set(
+    (classData?.studentEmails || []).map((email) => email.toLowerCase()),
+  );
+  const eligibleStudents = students.filter(
+    (student) =>
+      student.degree === classData?.degree
+      && String(student.semester || "") === String(classData?.semester)
+      && !invitedEmails.has(student.email.toLowerCase())
+      && !enrolledEmails.has(student.email.toLowerCase()),
+  );
+
   const handleViewStudents = (assignmentId: string) => {
     navigate(`/teacher/assignment/${assignmentId}/students`);
   };
@@ -187,19 +279,81 @@ const ClassDetail = () => {
               <p className="text-sm text-muted-foreground">{classData?.section}</p>
             </div>
           </div>
-          <Button
-            onClick={handleCreateAssignment}
-            className="flex shrink-0 items-center gap-2 px-3 sm:px-4"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Create Assignment</span>
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void openStudentManager()}
+              className="flex items-center gap-2 px-3 sm:px-4"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Students</span>
+            </Button>
+            <Button
+              onClick={handleCreateAssignment}
+              className="flex items-center gap-2 px-3 sm:px-4"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Create Assignment</span>
+            </Button>
+          </div>
         </header>
 
         <div className="p-4 sm:p-6">
+          {manageStudentsOpen && (
+            <section className="mb-6 rounded-2xl border border-border bg-card p-4 sm:p-6" aria-labelledby="manage-students-title">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 id="manage-students-title" className="font-semibold text-foreground">Invite students to this course</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Invite registered {getStudentProgramLabel(classData?.degree)} students in semester {classData?.semester}. They will register themselves.
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" onClick={() => setManageStudentsOpen(false)}>
+                  Close
+                </Button>
+              </div>
+              {studentsError && <p className="mb-3 text-sm text-destructive" role="alert">{studentsError}</p>}
+              {studentsMessage && <p className="mb-3 text-sm text-accent" role="status">{studentsMessage}</p>}
+              {studentsLoading ? (
+                <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                  <Loader className="h-4 w-4 animate-spin" /> Loading students...
+                </div>
+              ) : eligibleStudents.length === 0 ? (
+                <p className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
+                  No new registered students currently match this class.
+                </p>
+              ) : (
+                <>
+                  <div className="max-h-60 space-y-2 overflow-y-auto rounded-lg border border-border p-3">
+                    {eligibleStudents.map((student) => (
+                      <label key={student.email} className="flex cursor-pointer flex-wrap items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-muted/50">
+                        <input
+                          type="checkbox"
+                          checked={selectedStudentEmails.includes(student.email)}
+                          onChange={() => toggleStudentSelection(student.email)}
+                          className="h-4 w-4 rounded border-border accent-primary"
+                        />
+                        <span className="font-medium text-foreground">{student.name}</span>
+                        <span className="break-all text-muted-foreground">{student.email}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    className="mt-4"
+                    onClick={() => void addStudentsToClass()}
+                    disabled={addStudentsLoading || selectedStudentEmails.length === 0}
+                  >
+                    {addStudentsLoading ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                    Invite {selectedStudentEmails.length || ""} selected students
+                  </Button>
+                </>
+              )}
+            </section>
+          )}
           {location.state?.assignmentCreated && (
             <div className="bg-accent/10 text-accent rounded-lg p-4 mb-6" role="status">
-              Assignment created successfully.
+              Assignment {location.state.assignmentNumber} created successfully.
             </div>
           )}
           {loading ? (
@@ -237,7 +391,7 @@ const ClassDetail = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-foreground mb-1">
-                        {assignment.title}
+                        Assignment {assignment.assignment_number}: {assignment.title}
                       </h3>
                       <p className="text-sm text-muted-foreground">
                         {assignment.description}

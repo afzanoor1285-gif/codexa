@@ -24,8 +24,21 @@ import AccountSettingsDialog from "@/components/AccountSettingsDialog";
 import MobileNavigation from "@/components/MobileNavigation";
 import { Input } from "@/components/ui/input";
 import { getUser, logout } from "@/lib/auth";
+import {
+  getStudentProgramLabel,
+  STUDENT_SEMESTERS,
+  STUDENT_PROGRAMS,
+  UNSPECIFIED_PROGRAM,
+} from "@/lib/student-programs";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000";
+
+interface Student {
+  name: string;
+  email: string;
+  degree?: string | null;
+  semester?: number | null;
+}
 
 const TeacherDashboard = () => {
   const [user, setUser] = useState(getUser);
@@ -47,12 +60,16 @@ const TeacherDashboard = () => {
     .slice(0, 2)
     .toUpperCase();
   const [activeTab, setActiveTab] = useState("students");
-  const [students, setStudents] = useState([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newDegree, setNewDegree] = useState('');
+  const [newSemester, setNewSemester] = useState('');
+  const [studentProgramFilter, setStudentProgramFilter] = useState('all');
+  const [studentSearch, setStudentSearch] = useState('');
 
   useEffect(() => {
     if (activeTab === "students") {
@@ -62,9 +79,13 @@ const TeacherDashboard = () => {
       fetch(`${API_BASE_URL}/api/students`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-        .then(res => res.json())
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Unable to load students");
+          return data;
+        })
         .then(data => {
-          setStudents(data.students);
+          setStudents(data.students || []);
           setLoading(false);
         })
         .catch(err => {
@@ -90,7 +111,7 @@ const TeacherDashboard = () => {
   }, []);
 
   const handleAddStudent = async () => {
-    if (!newName || !newEmail) return;
+    if (!newName.trim() || !newEmail.trim() || !newDegree || !newSemester) return;
     try {
       const token = localStorage.getItem("codexa_token");
       const response = await fetch(`${API_BASE_URL}/api/students`, {
@@ -99,11 +120,18 @@ const TeacherDashboard = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: newName, email: newEmail })
+        body: JSON.stringify({
+          name: newName.trim(),
+          email: newEmail.trim(),
+          degree: newDegree,
+          semester: Number(newSemester),
+        })
       });
       if (response.ok) {
         setNewName('');
         setNewEmail('');
+        setNewDegree('');
+        setNewSemester('');
         // Refetch students
         setLoading(true);
         fetch(`${API_BASE_URL}/api/students`, {
@@ -126,6 +154,16 @@ const TeacherDashboard = () => {
       alert('Error adding student');
     }
   };
+
+  const filteredStudents = students.filter((student) => {
+    const matchesProgram = studentProgramFilter === 'all'
+      || (student.degree || UNSPECIFIED_PROGRAM) === studentProgramFilter;
+    const query = studentSearch.trim().toLowerCase();
+    const matchesSearch = !query
+      || student.name.toLowerCase().includes(query)
+      || student.email.toLowerCase().includes(query);
+    return matchesProgram && matchesSearch;
+  });
 
   const totalSubmissions = submissions.length;
   const pendingReview = submissions.filter(s => s.score === null || s.score === undefined).length;
@@ -246,7 +284,12 @@ const TeacherDashboard = () => {
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Search students..." className="pl-10 w-64" />
+              <Input
+                placeholder="Search students..."
+                className="pl-10 w-64"
+                value={studentSearch}
+                onChange={(event) => setStudentSearch(event.target.value)}
+              />
             </div>
             <Button variant="outline" size="icon">
               <Bell className="w-5 h-5" />
@@ -259,6 +302,9 @@ const TeacherDashboard = () => {
           {activeTab === "students" ? (
             <div>
               <h2 className="text-2xl font-bold mb-4">Students</h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Filter by program so you can choose the right students for each class.
+              </p>
               <div className="mb-4 p-4 bg-muted rounded-lg">
                 <h3 className="font-semibold mb-2">Add New Student</h3>
                 <div className="mb-2 flex flex-col gap-2 sm:flex-row">
@@ -272,17 +318,73 @@ const TeacherDashboard = () => {
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                   />
+                  <select
+                    aria-label="Student degree / department"
+                    value={newDegree}
+                    onChange={(event) => setNewDegree(event.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    required
+                  >
+                    <option value="">Select program</option>
+                    {STUDENT_PROGRAMS.map((program) => (
+                      <option key={program.value} value={program.value}>{program.label}</option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Student semester"
+                    value={newSemester}
+                    onChange={(event) => setNewSemester(event.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    required
+                  >
+                    <option value="">Select semester</option>
+                    {STUDENT_SEMESTERS.map((semester) => (
+                      <option key={semester} value={semester}>Semester {semester}</option>
+                    ))}
+                  </select>
                 </div>
-                <Button onClick={handleAddStudent}>Add Student</Button>
+                <Button
+                  onClick={handleAddStudent}
+                  disabled={!newName.trim() || !newEmail.trim() || !newDegree || !newSemester}
+                >
+                  Add Student
+                </Button>
               </div>
+              <label htmlFor="student-program-filter" className="mb-2 block text-sm font-medium">
+                Show students from
+              </label>
+              <select
+                id="student-program-filter"
+                value={studentProgramFilter}
+                onChange={(event) => setStudentProgramFilter(event.target.value)}
+                className="mb-4 h-10 w-full rounded-md border border-input bg-background px-3 text-sm sm:max-w-md"
+              >
+                <option value="all">All programs</option>
+                {STUDENT_PROGRAMS.map((program) => (
+                  <option key={program.value} value={program.value}>{program.label}</option>
+                ))}
+                <option value={UNSPECIFIED_PROGRAM}>Program not provided (older accounts)</option>
+              </select>
               {loading && <p>Loading students...</p>}
               {error && <p className="text-red-500">Error: {error}</p>}
-              {!loading && !error && students.length === 0 && <p>No students found.</p>}
-              {!loading && !error && students.length > 0 && (
+              {!loading && !error && filteredStudents.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {students.length === 0
+                    ? "No students found."
+                    : "No students match this program and search."}
+                </p>
+              )}
+              {!loading && !error && filteredStudents.length > 0 && (
                 <ul className="space-y-2">
-                  {students.map((student, index) => (
-                    <li key={index} className="p-4 bg-card rounded-lg border">
-                      <p className="font-medium">{student.name}</p>
+                  {filteredStudents.map((student) => (
+                    <li key={student.email} className="p-4 bg-card rounded-lg border">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-medium">{student.name}</p>
+                        <span className="rounded-full bg-secondary/10 px-2.5 py-1 text-xs font-medium text-secondary">
+                          {getStudentProgramLabel(student.degree)}
+                          {student.semester ? ` · Semester ${student.semester}` : ""}
+                        </span>
+                      </div>
                       <p className="text-sm text-muted-foreground">{student.email}</p>
                     </li>
                   ))}

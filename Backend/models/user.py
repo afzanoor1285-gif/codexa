@@ -17,6 +17,7 @@ class User:
         name: Optional[str] = None,
         student_id: Optional[str] = None,
         degree: Optional[str] = None,
+        semester: Optional[int] = None,
     ):
         if role not in ['student', 'teacher', 'admin']:
             raise ValueError("Invalid role")
@@ -30,6 +31,8 @@ class User:
         }
         if degree is not None:
             user_doc['degree'] = degree
+        if semester is not None:
+            user_doc['semester'] = semester
         result = self.collection.insert_one(user_doc)
         return str(result.inserted_id)
 
