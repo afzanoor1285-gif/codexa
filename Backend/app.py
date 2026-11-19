@@ -8,8 +8,13 @@ from routes.assignments import assignments_bp
 from routes.submissions import submissions_bp
 from models.submission import Submission
 from services.mail_service import init_mail, send_preference_notification
+from Ml.code_detector import (
+    analyze_code as analyze_ml_code,
+    is_model_loaded,
+    predict_code as predict_ml_code,
+    predict_code_ai as predict_ml_code_ai,
+)
 import os
-import pickle
 import re
 from datetime import datetime
 import jwt
@@ -21,79 +26,22 @@ CORS(app)
 # Initialize Flask-Mail
 init_mail(app)
 
-# Load ML model and vectorizer safely
-model = None
-vectorizer = None
-try:
-    model_path = os.path.join(os.path.dirname(__file__), 'Ml', 'model.pkl')
-    vectorizer_path = os.path.join(os.path.dirname(__file__), 'Ml', 'vectorizer.pkl')
-    with open(model_path, 'rb') as f:
-        model = pickle.load(f)
-    with open(vectorizer_path, 'rb') as f:
-        vectorizer = pickle.load(f)
-    print("ML model and vectorizer loaded successfully!")
-except Exception as e:
-    print(f"Failed to load ML model or vectorizer: {e}")
-
-# Preprocess function
-def preprocess(text):
-    text = text.lower()
-    text = re.sub(r'[^\w\s]', '', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
 def predict_code_ai(code: str):
     """
     Predict if code is AI-generated or Human-written.
     Returns dict with prediction and confidence.
     """
-    if model is None or vectorizer is None:
-        raise ValueError("ML model not loaded")
-    
-    processed = preprocess(code)
-    X = vectorizer.transform([processed])
-    pred = model.predict(X)[0]
-    proba = model.predict_proba(X)[0]
-    prediction = "AI" if pred == 1 else "Human"
-    confidence = float(max(proba))
-    return {"prediction": prediction, "confidence": confidence}
+    return predict_ml_code_ai(code)
 
 def predict_code(code: str):
     """
     Predict if code is AI-generated or Human-written.
     Returns tuple: (label, confidence)
     """
-    if model is None or vectorizer is None:
-        raise ValueError("ML model not loaded")
-    
-    processed = preprocess(code)
-    X = vectorizer.transform([processed])
-    pred = model.predict(X)[0]
-    proba = model.predict_proba(X)[0]
-    label = "AI" if pred == 1 else "Human"
-    confidence = float(max(proba))
-    return label, confidence
+    return predict_ml_code(code)
 
 def analyze_code(code: str):
-    if model is None or vectorizer is None:
-        raise ValueError("ML model not loaded")
-
-    processed = preprocess(code)
-    features = vectorizer.transform([processed])
-    probabilities = model.predict_proba(features)[0]
-    prediction = model.predict(features)[0]
-    class_probabilities = {
-        int(label): float(probability)
-        for label, probability in zip(model.classes_, probabilities)
-    }
-    ai_percentage = class_probabilities.get(1, 0.0) * 100
-    human_percentage = class_probabilities.get(0, 0.0) * 100
-    return {
-        'aiLabel': 'AI' if int(prediction) == 1 else 'Human',
-        'aiConfidence': max(ai_percentage, human_percentage) / 100,
-        'aiPercentage': round(ai_percentage, 2),
-        'humanPercentage': round(human_percentage, 2),
-    }
+    return analyze_ml_code(code)
 
 # Test MongoDB connection
 try:
@@ -568,7 +516,7 @@ def predict_ai():
     Accepts plain text or JSON with 'code' or 'text' key.
     Returns JSON with prediction and confidence.
     """
-    if model is None or vectorizer is None:
+    if not is_model_loaded():
         return jsonify({"error": "ML model not loaded"}), 500
     
     # Handle different content types
@@ -590,17 +538,7 @@ def predict_ai():
         return jsonify({"error": "Code is required"}), 400
     
     try:
-        # Preprocess the code
-        processed = preprocess(code)
-        # Vectorize
-        X = vectorizer.transform([processed])
-        # Predict
-        pred = model.predict(X)[0]
-        proba = model.predict_proba(X)[0]
-        # Assuming 1 is AI, 0 is Human
-        prediction = "AI" if pred == 1 else "Human"
-        confidence = float(max(proba))
-        return jsonify({"prediction": prediction, "confidence": confidence})
+        return jsonify(predict_ml_code_ai(code))
     except Exception as e:
         return jsonify({"error": f"Prediction failed: {str(e)}"}), 500
 

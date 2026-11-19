@@ -1,74 +1,284 @@
-# pip install scikit-learn pandas numpy joblib
-import os
-import re
+import argparse
+import json
+import logging
+from pathlib import Path
+
+import joblib
+import pandas as pd
+import sklearn
+from scipy.sparse import csr_matrix, hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-import pickle
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+)
+from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import LinearSVC
 
-# Base path
-base_path = os.path.dirname(__file__)
+from feature_extractor import extract_features
 
-# Load text files
-def load_texts(folder, label):
-    texts = []
-    labels = []
-    for file in os.listdir(folder):
-        if file.endswith('.py'):
-            path = os.path.join(folder, file)
-            try:
-                with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                    texts.append(content)
-                    labels.append(label)
-            except Exception as e:
-                print(f"Skipping {file}: {e}")
-    return texts, labels
+logger = logging.getLogger("ai_detector_training")
+MODEL_DIRECTORY = Path(__file__).parent / "models"
+DATASET_DIRECTORY = Path(__file__).parent / "dataset"
+C_VALUES = (0.03, 0.1, 0.3, 1.0, 2.0)
 
-# Folders
-ai_folder = os.path.join(base_path, 'dataset', 'ai', 'python')
-human_folder = os.path.join(base_path, 'dataset', 'human', 'python')
 
-ai_texts, ai_labels = load_texts(ai_folder, 1)
-human_texts, human_labels = load_texts(human_folder, 0)
+def load_dataset(dataset_directory):
+    human = pd.read_csv(
+        dataset_directory / "human_selected_dataset.csv",
+        usecols=["problem_id", "code", "label"],
+    )
+    generated = pd.read_csv(
+        dataset_directory / "created_dataset_with_llms.csv",
+        usecols=["problem_id", "code", "label", "status_in_folder"],
+    )
 
-all_texts = ai_texts + human_texts
-all_labels = ai_labels + human_labels
+    generated = generated.loc[
+        generated["status_in_folder"].eq("Generate"),
+        ["problem_id", "code", "label"],
+    ]
+    dataset = pd.concat([human, generated], ignore_index=True)
+    dataset = dataset.dropna(subset=["problem_id", "code"])
+    dataset["code"] = dataset["code"].astype(str)
+    dataset = dataset.loc[dataset["code"].str.strip().ne("")]
+    dataset = dataset.drop_duplicates(subset="code").reset_index(drop=True)
+    dataset["label"] = dataset["label"].astype(int)
 
-# Preprocess
-def preprocess(text):
-    text = text.lower()
-    text = re.sub(r'[^\w\s]', '', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+    if set(dataset["label"].unique()) != {0, 1}:
+        raise ValueError("The training dataset must include human (0) and AI (1) examples")
 
-processed_texts = [preprocess(text) for text in all_texts]
+    return dataset
 
-# TF-IDF
-vectorizer = TfidfVectorizer(max_features=5000)
-X = vectorizer.fit_transform(processed_texts)
-y = all_labels
 
-# Split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+def make_vectorizer():
+    return TfidfVectorizer(
+        analyzer="char_wb",
+        ngram_range=(3, 5),
+        max_features=70000,
+        sublinear_tf=True,
+    )
 
-# Train
-model = LogisticRegression()
-model.fit(X_train, y_train)
 
-# Evaluate
-y_pred = model.predict(X_test)
-print(f'Accuracy: {accuracy_score(y_test, y_pred)}')
-print(f'Precision: {precision_score(y_test, y_pred)}')
-print(f'Recall: {recall_score(y_test, y_pred)}')
-print(f'F1-Score: {f1_score(y_test, y_pred)}')
+def make_model(c_value):
+    return LinearSVC(
+        C=c_value,
+        class_weight="balanced",
+        random_state=42,
+        max_iter=5000,
+    )
 
-# Save
-model_dir = os.path.join(base_path, 'model')
-os.makedirs(model_dir, exist_ok=True)
 
-with open(os.path.join(model_dir, 'model.pkl'), 'wb') as f:
-    pickle.dump(model, f)
-with open(os.path.join(model_dir, 'vectorizer.pkl'), 'wb') as f:
-    pickle.dump(vectorizer, f)
+def extract_feature_frame(codes):
+    return pd.DataFrame([extract_features(code) for code in codes])
+
+
+def create_training_features(codes, feature_frame=None):
+    if feature_frame is None:
+        feature_frame = extract_feature_frame(codes)
+
+    vectorizer = make_vectorizer()
+    text_features = vectorizer.fit_transform(codes)
+
+    scaler = StandardScaler()
+    structural_features = csr_matrix(scaler.fit_transform(feature_frame))
+    combined_features = hstack(
+        (text_features, structural_features),
+        format="csr",
+    )
+    return combined_features, vectorizer, scaler
+
+
+def create_validation_features(codes, vectorizer, scaler):
+    text_features = vectorizer.transform(codes)
+    feature_frame = extract_feature_frame(codes)
+    structural_features = csr_matrix(scaler.transform(feature_frame))
+    return hstack((text_features, structural_features), format="csr")
+
+
+def score_model(y_true, predictions):
+    return {
+        "accuracy": float(accuracy_score(y_true, predictions)),
+        "balanced_accuracy": float(balanced_accuracy_score(y_true, predictions)),
+        "macro_f1": float(f1_score(y_true, predictions, average="macro")),
+    }
+
+
+def select_regularization(training_data):
+    folds = StratifiedGroupKFold(
+        n_splits=3,
+        shuffle=True,
+        random_state=42,
+    )
+    feature_frame = extract_feature_frame(training_data["code"].tolist())
+    fold_features = []
+
+    for training_indices, validation_indices in folds.split(
+        training_data["code"],
+        training_data["label"],
+        groups=training_data["problem_id"],
+    ):
+        training_codes = training_data["code"].iloc[training_indices].tolist()
+        validation_codes = training_data["code"].iloc[validation_indices].tolist()
+
+        vectorizer = make_vectorizer()
+        training_text = vectorizer.fit_transform(training_codes)
+        validation_text = vectorizer.transform(validation_codes)
+
+        scaler = StandardScaler()
+        training_structural = csr_matrix(
+            scaler.fit_transform(feature_frame.iloc[training_indices])
+        )
+        validation_structural = csr_matrix(
+            scaler.transform(feature_frame.iloc[validation_indices])
+        )
+        fold_features.append((
+            hstack((training_text, training_structural), format="csr"),
+            hstack((validation_text, validation_structural), format="csr"),
+            training_data["label"].iloc[training_indices].to_numpy(),
+            training_data["label"].iloc[validation_indices].to_numpy(),
+        ))
+
+    results = {}
+    for c_value in C_VALUES:
+        fold_scores = []
+        for training_features, validation_features, y_train, y_validation in fold_features:
+            model = make_model(c_value)
+            model.fit(training_features, y_train)
+            predictions = model.predict(validation_features)
+            fold_scores.append(score_model(y_validation, predictions))
+
+        results[str(c_value)] = {
+            metric: sum(fold[metric] for fold in fold_scores) / len(fold_scores)
+            for metric in ("balanced_accuracy", "macro_f1")
+        }
+
+    best_c = max(
+        C_VALUES,
+        key=lambda value: (
+            results[str(value)]["balanced_accuracy"],
+            results[str(value)]["macro_f1"],
+        ),
+    )
+    return best_c, results
+
+
+def evaluate_holdout(training_data, test_data, c_value):
+    training_codes = training_data["code"].tolist()
+    x_train, vectorizer, scaler = create_training_features(training_codes)
+    model = make_model(c_value)
+    model.fit(x_train, training_data["label"])
+
+    train_predictions = model.predict(x_train)
+    x_test = create_validation_features(test_data["code"].tolist(), vectorizer, scaler)
+    test_predictions = model.predict(x_test)
+
+    return {
+        "training": score_model(training_data["label"], train_predictions),
+        "test": score_model(test_data["label"], test_predictions),
+        "confusion_matrix": confusion_matrix(
+            test_data["label"],
+            test_predictions,
+            labels=[0, 1],
+        ).tolist(),
+        "classification_report": classification_report(
+            test_data["label"],
+            test_predictions,
+            labels=[0, 1],
+            target_names=["Human", "AI"],
+            output_dict=True,
+            zero_division=0,
+        ),
+    }
+
+
+def save_final_model(dataset, c_value):
+    codes = dataset["code"].tolist()
+    features, vectorizer, scaler = create_training_features(codes)
+    model = make_model(c_value)
+    model.fit(features, dataset["label"])
+
+    MODEL_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    for filename, artifact in (
+        ("python_ai_detector.pkl", model),
+        ("tfidf_vectorizer.pkl", vectorizer),
+        ("feature_scaler.pkl", scaler),
+    ):
+        temporary_path = MODEL_DIRECTORY / (filename + ".tmp")
+        joblib.dump(artifact, temporary_path)
+        temporary_path.replace(MODEL_DIRECTORY / filename)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Train and evaluate the AI detector using task-grouped validation."
+    )
+    parser.add_argument(
+        "dataset_directory",
+        type=Path,
+        nargs="?",
+        default=DATASET_DIRECTORY,
+        help="Directory containing the human and AI training CSV files",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    dataset = load_dataset(args.dataset_directory)
+    train_indices, test_indices = next(
+        GroupShuffleSplit(
+            n_splits=1,
+            test_size=0.2,
+            random_state=42,
+        ).split(dataset["code"], dataset["label"], groups=dataset["problem_id"])
+    )
+    training_data = dataset.iloc[train_indices].reset_index(drop=True)
+    test_data = dataset.iloc[test_indices].reset_index(drop=True)
+    shared_problems = set(training_data["problem_id"]) & set(test_data["problem_id"])
+    if shared_problems:
+        raise ValueError("A programming problem leaked across the train/test split")
+
+    logger.info(
+        "Using %s examples from %s problems; grouped training/test split is %s/%s examples",
+        len(dataset),
+        dataset["problem_id"].nunique(),
+        len(training_data),
+        len(test_data),
+    )
+    best_c, cv_results = select_regularization(training_data)
+    logger.info("Grouped cross-validation results: %s", cv_results)
+    logger.info("Selected regularization strength C=%s", best_c)
+
+    validation = evaluate_holdout(training_data, test_data, best_c)
+    logger.info("Training split metrics: %s", validation["training"])
+    logger.info("Unseen-problem test metrics: %s", validation["test"])
+    logger.info(
+        "Test confusion matrix (actual rows: human/AI; predicted columns: human/AI): %s",
+        validation["confusion_matrix"],
+    )
+
+    save_final_model(dataset, best_c)
+    metrics = {
+        "sklearn_version": sklearn.__version__,
+        "selected_c": best_c,
+        "dataset_samples": len(dataset),
+        "dataset_problems": dataset["problem_id"].nunique(),
+        "training_samples": len(training_data),
+        "training_problems": training_data["problem_id"].nunique(),
+        "test_samples": len(test_data),
+        "test_problems": test_data["problem_id"].nunique(),
+        "grouped_cross_validation": cv_results,
+        "holdout_validation": validation,
+        "final_model_fit_samples": len(dataset),
+    }
+    (MODEL_DIRECTORY / "validation_metrics.json").write_text(
+        json.dumps(metrics, indent=2),
+        encoding="utf-8",
+    )
+    logger.info("Trained model artifacts and validation metrics saved to %s", MODEL_DIRECTORY)
+
+
+if __name__ == "__main__":
+    main()
