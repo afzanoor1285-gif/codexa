@@ -6,7 +6,7 @@ Codexa is a React/Vite frontend and Flask/MongoDB backend.
 
 Configure the backend service with `Backend` as its root directory.
 
-- Python runtime: 3.11 (the pinned NumPy and scikit-learn versions need it).
+- Python runtime: 3.11 or 3.13.
 - Install command: `pip install -r requirements.txt`
 - Start command: `gunicorn --bind 0.0.0.0:$PORT app:app`
 - Copy `Backend/.env.example` variables into the hosting provider's environment settings.
@@ -14,7 +14,7 @@ Configure the backend service with `Backend` as its root directory.
 - Set `JWT_SECRET_KEY` to a new, randomly generated secret. Never use the example value in production.
 - Configure `EMAIL_ADDRESS`, `EMAIL_PASSWORD`, and `SUPPORT_EMAIL` if email features are needed.
 
-The ML model files are committed under `Backend/Ml/` and are loaded by the backend on startup.
+The active Python AI detector and its feature transformers are committed under `Backend/Ml/models/` and are loaded by the backend on startup. The human and AI training CSV files are included under `Backend/Ml/dataset/`. Reproduce training and its problem-grouped holdout evaluation with `python Ml\train.py` from `Backend`. Training tunes regularization on grouped cross-validation, evaluates on separate unseen problems, then saves one final model and its transformers. Validation details are saved to `Backend/Ml/models/validation_metrics.json`. The confidence shown by the app is a sigmoid-scaled decision-margin estimate, not a calibrated probability.
 
 ## Deploy the frontend
 
@@ -33,4 +33,4 @@ Profile photos are stored under the backend's `uploads/` directory. On hosting p
 
 ## Local development
 
-Install frontend dependencies in `Frontend` and run `npm run dev`. Install Python dependencies from `Backend/requirements.txt`, configure `Backend/.env`, and start the Flask app with `python app.py`.
+Install Python dependencies from the repository root with `.\.venv\Scripts\python.exe -m pip install -r Backend\requirements.txt`. Start the backend from `Backend` with `..\.venv\Scripts\python.exe app.py`. In a second terminal, run `npm run dev` from `Frontend` and open the local Vite URL. `Frontend` defaults to the local backend at `http://127.0.0.1:5000`.
