@@ -1,6 +1,8 @@
 import argparse
 import json
 import logging
+import math
+import statistics
 from pathlib import Path
 
 import joblib
@@ -24,7 +26,7 @@ from feature_extractor import extract_features
 logger = logging.getLogger("ai_detector_training")
 MODEL_DIRECTORY = Path(__file__).parent / "models"
 DATASET_DIRECTORY = Path(__file__).parent / "dataset"
-C_VALUES = (0.03, 0.1, 0.3, 1.0, 2.0)
+C_VALUES = (0.03, 0.05, 0.07, 0.1, 0.12, 0.15, 0.2, 0.3, 1.0, 2.0)
 
 
 def load_dataset(dataset_directory):
@@ -45,8 +47,19 @@ def load_dataset(dataset_directory):
     dataset = dataset.dropna(subset=["problem_id", "code"])
     dataset["code"] = dataset["code"].astype(str)
     dataset = dataset.loc[dataset["code"].str.strip().ne("")]
-    dataset = dataset.drop_duplicates(subset="code").reset_index(drop=True)
     dataset["label"] = dataset["label"].astype(int)
+
+    conflicting_labels = dataset.groupby("code")["label"].transform("nunique").gt(1)
+    if conflicting_labels.any():
+        conflict_count = dataset.loc[conflicting_labels, "code"].nunique()
+        logger.warning(
+            "Excluding %s code snippets (%s rows) with conflicting labels",
+            conflict_count,
+            int(conflicting_labels.sum()),
+        )
+        dataset = dataset.loc[~conflicting_labels]
+
+    dataset = dataset.drop_duplicates(subset="code").reset_index(drop=True)
 
     if set(dataset["label"].unique()) != {0, 1}:
         raise ValueError("The training dataset must include human (0) and AI (1) examples")
@@ -107,6 +120,36 @@ def score_model(y_true, predictions):
     }
 
 
+def select_c_with_one_standard_error(fold_scores_by_c):
+    mean_scores = {
+        c_value: sum(
+            fold["balanced_accuracy"] for fold in fold_scores
+        ) / len(fold_scores)
+        for c_value, fold_scores in fold_scores_by_c.items()
+    }
+    best_c = max(
+        mean_scores,
+        key=lambda value: (
+            mean_scores[value],
+            sum(fold["macro_f1"] for fold in fold_scores_by_c[value])
+            / len(fold_scores_by_c[value]),
+        ),
+    )
+    best_fold_scores = [
+        fold["balanced_accuracy"] for fold in fold_scores_by_c[best_c]
+    ]
+    standard_error = statistics.stdev(best_fold_scores) / math.sqrt(
+        len(best_fold_scores)
+    )
+    threshold = mean_scores[best_c] - standard_error
+    selected_c = min(
+        c_value
+        for c_value, mean_score in mean_scores.items()
+        if mean_score >= threshold
+    )
+    return selected_c, mean_scores[best_c], threshold
+
+
 def select_regularization(training_data):
     folds = StratifiedGroupKFold(
         n_splits=3,
@@ -143,27 +186,52 @@ def select_regularization(training_data):
         ))
 
     results = {}
+    fold_scores_by_c = {}
     for c_value in C_VALUES:
-        fold_scores = []
+        fold_scores_by_c[c_value] = []
+        training_fold_scores = []
         for training_features, validation_features, y_train, y_validation in fold_features:
             model = make_model(c_value)
             model.fit(training_features, y_train)
+            training_fold_scores.append(
+                score_model(y_train, model.predict(training_features))
+            )
             predictions = model.predict(validation_features)
-            fold_scores.append(score_model(y_validation, predictions))
+            fold_scores_by_c[c_value].append(
+                score_model(y_validation, predictions)
+            )
 
+        fold_scores = fold_scores_by_c[c_value]
         results[str(c_value)] = {
             metric: sum(fold[metric] for fold in fold_scores) / len(fold_scores)
-            for metric in ("balanced_accuracy", "macro_f1")
+            for metric in ("accuracy", "balanced_accuracy", "macro_f1")
         }
+        results[str(c_value)]["training"] = {
+            metric: sum(fold[metric] for fold in training_fold_scores)
+            / len(training_fold_scores)
+            for metric in ("accuracy", "balanced_accuracy", "macro_f1")
+        }
+        results[str(c_value)]["generalization_gap"] = {
+            metric: results[str(c_value)]["training"][metric]
+            - results[str(c_value)][metric]
+            for metric in ("accuracy", "balanced_accuracy", "macro_f1")
+        }
+        results[str(c_value)]["balanced_accuracy_standard_error"] = (
+            statistics.stdev(
+                [fold["balanced_accuracy"] for fold in fold_scores]
+            ) / math.sqrt(len(fold_scores))
+        )
 
-    best_c = max(
-        C_VALUES,
-        key=lambda value: (
-            results[str(value)]["balanced_accuracy"],
-            results[str(value)]["macro_f1"],
-        ),
+    selected_c, best_mean_score, threshold = select_c_with_one_standard_error(
+        fold_scores_by_c
     )
-    return best_c, results
+    selection = {
+        "criterion": "one_standard_error_balanced_accuracy",
+        "best_mean_balanced_accuracy": best_mean_score,
+        "one_standard_error_threshold": threshold,
+        "selected_c": selected_c,
+    }
+    return selected_c, results, selection
 
 
 def evaluate_holdout(training_data, test_data, c_value):
@@ -175,10 +243,16 @@ def evaluate_holdout(training_data, test_data, c_value):
     train_predictions = model.predict(x_train)
     x_test = create_validation_features(test_data["code"].tolist(), vectorizer, scaler)
     test_predictions = model.predict(x_test)
+    training_scores = score_model(training_data["label"], train_predictions)
+    test_scores = score_model(test_data["label"], test_predictions)
 
     return {
-        "training": score_model(training_data["label"], train_predictions),
-        "test": score_model(test_data["label"], test_predictions),
+        "training": training_scores,
+        "test": test_scores,
+        "generalization_gap": {
+            metric: training_scores[metric] - test_scores[metric]
+            for metric in ("accuracy", "balanced_accuracy", "macro_f1")
+        },
         "confusion_matrix": confusion_matrix(
             test_data["label"],
             test_predictions,
@@ -247,13 +321,20 @@ def main():
         len(training_data),
         len(test_data),
     )
-    best_c, cv_results = select_regularization(training_data)
+    best_c, cv_results, selection = select_regularization(training_data)
     logger.info("Grouped cross-validation results: %s", cv_results)
-    logger.info("Selected regularization strength C=%s", best_c)
+    logger.info(
+        "Selected C=%s using the one-standard-error rule "
+        "(best mean balanced accuracy %.4f; threshold %.4f)",
+        best_c,
+        selection["best_mean_balanced_accuracy"],
+        selection["one_standard_error_threshold"],
+    )
 
     validation = evaluate_holdout(training_data, test_data, best_c)
     logger.info("Training split metrics: %s", validation["training"])
     logger.info("Unseen-problem test metrics: %s", validation["test"])
+    logger.info("Train/test generalization gap: %s", validation["generalization_gap"])
     logger.info(
         "Test confusion matrix (actual rows: human/AI; predicted columns: human/AI): %s",
         validation["confusion_matrix"],
@@ -269,6 +350,7 @@ def main():
         "training_problems": training_data["problem_id"].nunique(),
         "test_samples": len(test_data),
         "test_problems": test_data["problem_id"].nunique(),
+        "regularization_selection": selection,
         "grouped_cross_validation": cv_results,
         "holdout_validation": validation,
         "final_model_fit_samples": len(dataset),

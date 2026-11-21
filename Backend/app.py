@@ -3,7 +3,8 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from bson import ObjectId
 from config import Config
-from routes.auth import STUDENT_DEGREES, auth_bp, role_required
+from class_roster import class_student_emails, enrolled_class_student_emails
+from routes.auth import EMAIL_PATTERN, STUDENT_DEGREES, auth_bp, role_required
 from routes.assignments import assignments_bp
 from routes.submissions import submissions_bp
 from models.submission import Submission
@@ -19,6 +20,13 @@ import re
 from datetime import datetime
 import jwt
 from werkzeug.utils import secure_filename
+
+
+def _normalize_student_semester(semester):
+    if isinstance(semester, str) and semester.isdigit():
+        return int(semester)
+    return semester
+
 
 app = Flask(__name__)
 CORS(app)
@@ -811,7 +819,7 @@ def create_class():
     available_students = {
         student['email'].strip().lower(): (
             student.get('degree'),
-            student.get('semester'),
+            _normalize_student_semester(student.get('semester')),
         )
         for student in db['students'].find(
             {'email': {'$type': 'string'}},
@@ -822,7 +830,7 @@ def create_class():
         {
             student['email'].strip().lower(): (
                 student.get('degree'),
-                student.get('semester'),
+                _normalize_student_semester(student.get('semester')),
             )
             for student in db['users'].find(
                 {'role': 'student', 'email': {'$type': 'string'}},
@@ -896,17 +904,37 @@ def add_students_to_class(class_id):
     if not isinstance(data, dict):
         return jsonify({"error": "Invalid request body"}), 400
     student_emails = data.get('invited_emails', data.get('student_emails'))
-    if not isinstance(student_emails, list) or not student_emails or any(
+    if student_emails is None:
+        student_emails = []
+    if not isinstance(student_emails, list) or any(
         not isinstance(email, str) or not email.strip()
         for email in student_emails
     ):
-        return jsonify({"error": "Select at least one valid student"}), 400
+        return jsonify({"error": "Student emails must be a list of valid emails"}), 400
 
     normalized_emails = list(dict.fromkeys(email.strip().lower() for email in student_emails))
+    new_student = data.get('student')
+    if new_student is not None:
+        if not isinstance(new_student, dict):
+            return jsonify({"error": "Student details must include a name and email"}), 400
+        student_name = new_student.get('name')
+        student_email = new_student.get('email')
+        if (
+            not isinstance(student_name, str)
+            or not student_name.strip()
+            or not isinstance(student_email, str)
+            or not EMAIL_PATTERN.fullmatch(student_email.strip())
+        ):
+            return jsonify({"error": "Enter a valid student name and email address"}), 400
+        normalized_emails.append(student_email.strip().lower())
+        normalized_emails = list(dict.fromkeys(normalized_emails))
+    if not normalized_emails:
+        return jsonify({"error": "Add a student or select at least one registered student"}), 400
+
     available_students = {
         student['email'].strip().lower(): (
             student.get('degree') or 'UNSPECIFIED',
-            student.get('semester'),
+            _normalize_student_semester(student.get('semester')),
         )
         for student in db['students'].find(
             {'email': {'$type': 'string'}},
@@ -916,33 +944,50 @@ def add_students_to_class(class_id):
     available_students.update({
         student['email'].strip().lower(): (
             student.get('degree') or 'UNSPECIFIED',
-            student.get('semester'),
+            _normalize_student_semester(student.get('semester')),
         )
         for student in db['users'].find(
             {'role': 'student', 'email': {'$type': 'string'}},
             {'_id': 0, 'email': 1, 'degree': 1, 'semester': 1},
         )
     })
+    if new_student is not None:
+        student_email = student_email.strip().lower()
+        class_program = class_record.get('degree') or 'UNSPECIFIED'
+        class_semester = _normalize_student_semester(class_record.get('semester'))
+        existing_program = available_students.get(student_email)
+        if existing_program is not None and existing_program != (class_program, class_semester):
+            return jsonify({"error": "This student's program or semester does not match the class"}), 400
+        if existing_program is None:
+            db['students'].update_one(
+                {'email': student_email},
+                {'$set': {
+                    'name': student_name.strip(),
+                    'email': student_email,
+                    'degree': class_program,
+                    'semester': class_semester,
+                }},
+                upsert=True,
+            )
+            available_students[student_email] = (class_program, class_semester)
+
     if any(email not in available_students for email in normalized_emails):
         return jsonify({"error": "One or more selected students are no longer available"}), 400
     if any(
         available_students[email] != (
             class_record.get('degree') or 'UNSPECIFIED',
-            class_record.get('semester'),
+            _normalize_student_semester(class_record.get('semester')),
         )
         for email in normalized_emails
     ):
         return jsonify({"error": "Students must match this class program and semester"}), 400
 
-    existing_emails = class_record.get('invited_emails', [])
     enrolled_emails = class_record.get('student_emails', [])
-    if not isinstance(existing_emails, list):
-        existing_emails = []
     if not isinstance(enrolled_emails, list):
         enrolled_emails = []
     existing_normalized = {
         email.strip().lower()
-        for email in existing_emails + enrolled_emails
+        for email in enrolled_emails
         if isinstance(email, str)
     }
     new_emails = [
@@ -952,15 +997,11 @@ def add_students_to_class(class_id):
     if new_emails:
         classes_collection.update_one(
             {'_id': ObjectId(class_id), 'teacher_id': request.user_id},
-            {'$addToSet': {'invited_emails': {'$each': new_emails}}},
+            {
+                '$addToSet': {'student_emails': {'$each': new_emails}},
+                '$pull': {'invited_emails': {'$in': new_emails}},
+            },
         )
-        teacher = db['users'].find_one(
-            {'_id': ObjectId(request.user_id)} if ObjectId.is_valid(request.user_id) else {'_id': request.user_id},
-            {'name': 1},
-        )
-        teacher_name = (teacher.get('name') if teacher else None) or 'Your teacher'
-        for email in new_emails:
-            create_course_invitation_notification(email, class_id, class_record, teacher_name)
 
     updated_class = classes_collection.find_one(
         {'_id': ObjectId(class_id), 'teacher_id': request.user_id},
@@ -969,10 +1010,11 @@ def add_students_to_class(class_id):
     if not updated_class:
         return jsonify({"error": "Class not found"}), 404
     return jsonify({
-        'message': 'Course registration invitation sent' if new_emails else 'Selected students were already invited',
+        'message': 'Students added to class' if new_emails else 'Selected students are already in this class',
         'student_emails': updated_class.get('student_emails', []),
         'invited_emails': updated_class.get('invited_emails', []),
-        'invited_count': len(new_emails),
+        'added_count': len(new_emails),
+        'class_student_count': len(class_student_emails(updated_class)),
     }), 200
 
 @app.route('/api/classes/<class_id>', methods=['DELETE'])
@@ -1027,11 +1069,7 @@ def get_class_assignments(class_id):
         assignment['assignment_number'] = assignment.get('assignment_number') or index
 
     # Convert database fields to the shape expected by the existing class page.
-    total_students = (
-        len(cls['student_emails'])
-        if isinstance(cls.get('student_emails'), list)
-        else cls.get('student_count', 0)
-    )
+    total_students = len(class_student_emails(cls))
     for assignment in assignments:
         assignment['_id'] = str(assignment['_id'])
         assignment['id'] = assignment['_id']
@@ -1098,15 +1136,34 @@ def get_assignment_submissions(assignment_id):
         item.get('studentEmail', '').strip().lower(): item
         for item in submitted_records
     }
+    student_names = {}
+    for student in db['students'].find(
+        {'email': {'$type': 'string'}},
+        {'_id': 0, 'name': 1, 'email': 1},
+    ):
+        student_names[student['email'].strip().lower()] = student.get('name')
+    for student in db['users'].find(
+        {'role': 'student', 'email': {'$type': 'string'}},
+        {'_id': 0, 'name': 1, 'email': 1},
+    ):
+        student_names[student['email'].strip().lower()] = student.get('name')
+    enrolled_emails = set(enrolled_class_student_emails(class_record))
     submissions = []
-    for email in class_record.get('student_emails', []):
+    for email in class_student_emails(class_record):
         normalized_email = email.strip().lower()
         record = submissions_by_email.get(normalized_email)
         submissions.append({
             'id': str(record['_id']) if record else normalized_email,
-            'name': (record.get('studentName') if record else None) or email,
+            'name': (
+                (record.get('studentName') if record else None)
+                or student_names.get(normalized_email)
+                or email
+            ),
             'email': email,
             'status': 'submitted' if record else 'pending',
+            'enrollmentStatus': (
+                'enrolled' if normalized_email in enrolled_emails else 'invited'
+            ),
             'submittedAt': (
                 record['createdAt'].isoformat()
                 if record and hasattr(record.get('createdAt'), 'isoformat')

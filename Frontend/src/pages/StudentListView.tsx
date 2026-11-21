@@ -11,6 +11,7 @@ import {
   FileCode,
   Loader,
   Users,
+  UserPlus,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import { downloadSubmissionCode } from "@/lib/api";
@@ -20,6 +21,7 @@ interface Student {
   name: string;
   email: string;
   status: "submitted" | "pending";
+  enrollmentStatus?: "enrolled" | "invited";
   submittedAt?: string;
   score?: number;
   aiLabel?: "AI" | "Human" | null;
@@ -195,6 +197,21 @@ const StudentListView = () => {
             </h1>
             <p className="text-sm text-muted-foreground">{assignment?.className}</p>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0"
+            disabled={!assignment}
+            onClick={() => {
+              if (!assignment) return;
+              navigate(`/teacher/class/${assignment.classId}`, {
+                state: { openStudentManager: true },
+              });
+            }}
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            Add Students
+          </Button>
         </header>
 
         <div className="p-4 sm:p-6">
@@ -316,8 +333,8 @@ const StudentListView = () => {
                           </th>
                           {visibleColumns.includes("status") && <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Status</th>}
                           {visibleColumns.includes("submission_time") && <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Submitted Date</th>}
-                          {visibleColumns.includes("ai_result") && <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">AI vs. human estimate</th>}
-                          {visibleColumns.includes("confidence") && <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Model confidence</th>}
+                          {visibleColumns.includes("ai_result") && <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">AI-vs-human model output</th>}
+                          {visibleColumns.includes("confidence") && <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Uncalibrated model score</th>}
                           {visibleColumns.includes("score") && <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Score</th>}
                           <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">
                             Actions
@@ -347,7 +364,7 @@ const StudentListView = () => {
                                   <>
                                     <Clock className="w-4 h-4 text-yellow-600" />
                                     <span className="text-yellow-600 font-medium">
-                                      Pending
+                                      {student.enrollmentStatus === "invited" ? "Invited" : "Pending"}
                                     </span>
                                   </>
                                 )}
