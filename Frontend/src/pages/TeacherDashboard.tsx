@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
-  Users,
   FileCode,
   AlertTriangle,
   Clock,
@@ -10,24 +9,16 @@ import {
   PlusCircle,
   Download,
   Search,
-  Bell,
-  Settings,
-  LogOut,
   Eye,
   BookOpen,
-  CheckCircle2,
   ShieldCheck,
   ShieldAlert,
   ArrowUpRight,
-  Filter,
   GraduationCap,
 } from "lucide-react";
-import BrandLogo from "@/components/BrandLogo";
-import ProfilePhoto from "@/components/ProfilePhoto";
-import AccountSettingsDialog from "@/components/AccountSettingsDialog";
-import MobileNavigation from "@/components/MobileNavigation";
+import TeacherLayout from "@/components/TeacherLayout";
 import { Input } from "@/components/ui/input";
-import { getUser, logout, getToken } from "@/lib/auth";
+import { getToken } from "@/lib/auth";
 import {
   Dialog,
   DialogContent,
@@ -96,29 +87,29 @@ interface SubmissionItem {
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState(getUser);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [classPickerOpen, setClassPickerOpen] = useState(false);
 
+  const tabParam = searchParams.get("tab") as "overview" | "assignments" | "students" | "plagiarism" | null;
+  const [activeTab, setActiveTab] = useState<"overview" | "assignments" | "students" | "plagiarism">(
+    tabParam || "overview"
+  );
+
   useEffect(() => {
-    const updateUser = (event: Event) => {
-      const updatedUser = (event as CustomEvent<ReturnType<typeof getUser>>).detail;
-      setUser(updatedUser);
-    };
-    window.addEventListener("codexa:user-updated", updateUser);
-    return () => window.removeEventListener("codexa:user-updated", updateUser);
-  }, []);
+    if (tabParam && ["overview", "assignments", "students", "plagiarism"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
-  const teacherName = user?.name?.trim() || user?.email?.split("@")[0] || "Teacher";
-  const teacherInitials = teacherName
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const handleTabChange = (tab: "overview" | "assignments" | "students" | "plagiarism") => {
+    setActiveTab(tab);
+    if (tab === "overview") {
+      setSearchParams({});
+    } else {
+      setSearchParams({ tab });
+    }
+  };
 
-  const [activeTab, setActiveTab] = useState<"overview" | "assignments" | "students" | "plagiarism">("overview");
   const [students, setStudents] = useState<Student[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -144,7 +135,6 @@ const TeacherDashboard = () => {
 
     const headers = { Authorization: `Bearer ${token}` };
 
-    // Submissions
     fetch(`${API_BASE_URL}/api/submissions`, { headers })
       .then((res) => res.json())
       .then((data) => {
@@ -152,7 +142,6 @@ const TeacherDashboard = () => {
       })
       .catch((err) => console.error("Failed to fetch submissions:", err));
 
-    // Classes
     fetch(`${API_BASE_URL}/api/classes`, { headers })
       .then((res) => res.json())
       .then((data) => {
@@ -160,7 +149,6 @@ const TeacherDashboard = () => {
       })
       .catch((err) => console.error("Failed to fetch classes:", err));
 
-    // Assignments
     fetch(`${API_BASE_URL}/assignments/`, { headers })
       .then((res) => res.json())
       .then((data) => {
@@ -169,7 +157,7 @@ const TeacherDashboard = () => {
       .catch((err) => console.error("Failed to fetch assignments:", err));
   }, []);
 
-  // Load students when students tab is opened
+  // Load students when students tab is active
   useEffect(() => {
     if (activeTab === "students" && students.length === 0) {
       setLoading(true);
@@ -215,7 +203,6 @@ const TeacherDashboard = () => {
         setNewEmail("");
         setNewDegree("");
         setNewSemester("");
-        // Reload students
         const res = await fetch(`${API_BASE_URL}/api/students`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -230,7 +217,6 @@ const TeacherDashboard = () => {
     }
   };
 
-  // Map class name lookup
   const classMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const cls of classes) {
@@ -285,7 +271,6 @@ const TeacherDashboard = () => {
     });
   }, [students, studentProgramFilter, searchQuery]);
 
-  // Handle Export CSV
   const handleExportCSV = () => {
     if (submissions.length === 0) {
       alert("No submissions available to export.");
@@ -335,9 +320,22 @@ const TeacherDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <AccountSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} role="teacher" />
-
+    <TeacherLayout
+      title="Teacher Dashboard"
+      subtitle="Overview of classes, submissions, and code integrity audits"
+      activeNav={activeTab}
+      actions={
+        <div className="relative hidden md:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search submissions or students..."
+            className="pl-9 h-8 w-60 text-xs"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+      }
+    >
       {/* Class Selection Dialog for Creating Assignment */}
       <Dialog open={classPickerOpen} onOpenChange={setClassPickerOpen}>
         <DialogContent className="sm:max-w-md">
@@ -355,10 +353,10 @@ const TeacherDashboard = () => {
                   setClassPickerOpen(false);
                   navigate(`/teacher/classes/${c.id || c._id}/assignments/new`);
                 }}
-                className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors text-left"
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-border/80 hover:bg-muted/80 transition-colors text-left"
               >
                 <div>
-                  <p className="font-semibold text-foreground">{c.name}</p>
+                  <p className="font-semibold text-sm text-foreground">{c.name}</p>
                   <p className="text-xs text-muted-foreground">{c.code} · {c.studentCount || 0} students</p>
                 </div>
                 <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
@@ -368,684 +366,579 @@ const TeacherDashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:block z-20">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 mb-8 px-2">
-          <BrandLogo className="w-10 h-10 object-contain" />
-          <span className="text-xl font-bold tracking-tight text-foreground">Codexa</span>
-        </Link>
+      <div className="space-y-6">
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === "overview" && (
+          <>
+            {/* Stats KPIs */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                    <FileCode className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Submissions
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-foreground">{totalSubmissions}</div>
+                <div className="text-xs text-muted-foreground mt-1">Across all active classes</div>
+              </div>
 
-        {/* Navigation */}
-        <nav className="space-y-1">
-          {[
-            { icon: TrendingUp, label: "Overview", id: "overview" },
-            { icon: BookOpen, label: "My Classes", id: "myclasses", href: "/teacher/classes" },
-            { icon: FileCode, label: "Assignments", id: "assignments" },
-            { icon: Users, label: "Students", id: "students" },
-            { icon: AlertTriangle, label: "Plagiarism Reports", id: "plagiarism" },
-            { icon: Settings, label: "Settings", id: "settings" },
-          ].map((item) =>
-            item.href ? (
-              <Link
-                key={item.id}
-                to={item.href}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              >
-                <item.icon className="w-5 h-5 text-muted-foreground" />
-                {item.label}
-              </Link>
-            ) : (
-              <button
-                key={item.id}
-                onClick={() => {
-                  if (item.id === "settings") {
-                    setSettingsOpen(true);
-                  } else {
-                    setActiveTab(item.id as typeof activeTab);
-                  }
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                  activeTab === item.id
-                    ? "bg-secondary/10 text-secondary font-semibold"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                {item.label}
-              </button>
-            )
-          )}
-        </nav>
+              <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    AI-Flagged
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-destructive">{aiSubmissions.length}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {totalSubmissions > 0 ? `${aiPercent}% flagged by ML detector` : "No submissions yet"}
+                </div>
+              </div>
 
-        {/* Bottom */}
-        <div className="absolute bottom-4 left-4 right-4">
-          <Link
-            to="/"
-            onClick={logout}
-            className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:text-destructive transition-colors rounded-xl"
-          >
-            <LogOut className="w-5 h-5" />
-            Sign Out
-          </Link>
-        </div>
-      </aside>
+              <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Pending Review
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-foreground">{pendingReview.length}</div>
+                <div className="text-xs text-muted-foreground mt-1">Ungraded student codes</div>
+              </div>
 
-      {/* Main Content Area */}
-      <main className="lg:ml-64">
-        {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-md border-b border-border px-4 sm:px-6 py-3.5 flex items-center gap-3 sm:gap-4 justify-between z-10">
-          <MobileNavigation
-            items={[
-              { label: "Overview", icon: TrendingUp, onSelect: () => setActiveTab("overview") },
-              { label: "My Classes", icon: BookOpen, href: "/teacher/classes" },
-              { label: "Assignments", icon: FileCode, onSelect: () => setActiveTab("assignments") },
-              { label: "Students", icon: Users, onSelect: () => setActiveTab("students") },
-              { label: "Plagiarism Reports", icon: AlertTriangle, onSelect: () => setActiveTab("plagiarism") },
-              { label: "Settings", icon: Settings, onSelect: () => setSettingsOpen(true) },
-              { label: "Sign Out", icon: LogOut, href: "/", onSelect: logout },
-            ]}
-          />
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Teacher Dashboard</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground truncate">
-              Welcome back, {teacherName}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search submissions or students..."
-                className="pl-9 h-9 w-64 text-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+              <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Average Score
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-foreground">
+                  {averageScore !== null ? `${averageScore}%` : "—"}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {gradedSubmissions.length > 0 ? `${gradedSubmissions.length} graded assignments` : "No graded papers"}
+                </div>
+              </div>
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-9 w-9"
-              onClick={() => alert("No new notifications at this time.")}
-            >
-              <Bell className="w-4 h-4" />
-            </Button>
-            <ProfilePhoto initials={teacherInitials} role="teacher" />
-          </div>
-        </header>
 
-        <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl">
-          {/* TAB 1: OVERVIEW */}
-          {activeTab === "overview" && (
-            <>
-              {/* Stats KPIs */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-9 h-9 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center">
-                      <FileCode className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Submissions
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold text-foreground">{totalSubmissions}</div>
-                  <div className="text-xs text-muted-foreground mt-1">Across all active classes</div>
-                </div>
-
-                <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-9 h-9 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center">
-                      <AlertTriangle className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      AI-Flagged
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold text-destructive">{aiSubmissions.length}</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {totalSubmissions > 0 ? `${aiPercent}% flagged by ML detector` : "No submissions yet"}
-                  </div>
-                </div>
-
-                <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
-                      <Clock className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Pending Review
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold text-foreground">{pendingReview.length}</div>
-                  <div className="text-xs text-muted-foreground mt-1">Ungraded student codes</div>
-                </div>
-
-                <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-                      <TrendingUp className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Average Score
-                    </span>
-                  </div>
-                  <div className="text-2xl sm:text-3xl font-bold text-foreground">
-                    {averageScore !== null ? `${averageScore}%` : "—"}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {gradedSubmissions.length > 0 ? `${gradedSubmissions.length} graded assignments` : "No graded papers"}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Toolbar */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border/70">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={handleCreateAssignmentClick} className="gap-2">
-                    <PlusCircle className="w-4 h-4" />
-                    Create Assignment
+            {/* Action Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border/80 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={handleCreateAssignmentClick} className="gap-2 text-xs h-8">
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  Create Assignment
+                </Button>
+                <Button variant="outline" onClick={handleExportCSV} className="gap-2 text-xs h-8">
+                  <Download className="w-3.5 h-3.5" />
+                  Export CSV
+                </Button>
+                <Link to="/teacher/classes">
+                  <Button variant="outline" className="gap-2 text-xs h-8">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    Manage Classes
                   </Button>
-                  <Button variant="outline" onClick={handleExportCSV} className="gap-2">
-                    <Download className="w-4 h-4" />
-                    Export CSV
-                  </Button>
-                  <Link to="/teacher/classes">
-                    <Button variant="outline" className="gap-2">
-                      <BookOpen className="w-4 h-4" />
-                      Manage Classes
-                    </Button>
-                  </Link>
-                </div>
-
-                {/* Filter Pills */}
-                <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
-                  <span className="text-muted-foreground mr-1 hidden sm:inline">Filter:</span>
-                  {(
-                    [
-                      ["all", "All"],
-                      ["ai", "AI Flagged"],
-                      ["human", "Human"],
-                      ["pending", "Pending"],
-                      ["graded", "Graded"],
-                    ] as const
-                  ).map(([fKey, label]) => (
-                    <button
-                      key={fKey}
-                      onClick={() => setSubmissionFilter(fKey)}
-                      className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-                        submissionFilter === fKey
-                          ? "bg-secondary/20 text-secondary border border-secondary/30"
-                          : "text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                </Link>
               </div>
 
-              {/* Real Code Originality & Integrity Distribution */}
-              <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                  <div>
-                    <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-                      <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                      Code Integrity & Plagiarism Distribution
-                    </h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Real-time analysis powered by AST structural syntax tree & lexical stylometrics
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs font-medium">
-                    <span className="flex items-center gap-1.5 text-emerald-500">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                      Human: {humanPercent}% ({humanSubmissions.length})
-                    </span>
-                    <span className="flex items-center gap-1.5 text-destructive">
-                      <span className="w-2.5 h-2.5 rounded-full bg-destructive" />
-                      AI Flagged: {aiPercent}% ({aiSubmissions.length})
-                    </span>
-                  </div>
-                </div>
-
-                {/* Distribution Progress Bar */}
-                {totalSubmissions > 0 ? (
-                  <div className="space-y-3">
-                    <div className="w-full h-3 rounded-full bg-muted flex overflow-hidden">
-                      <div
-                        style={{ width: `${humanPercent}%` }}
-                        className="bg-emerald-500 transition-all duration-500"
-                        title={`Human Verified: ${humanPercent}%`}
-                      />
-                      <div
-                        style={{ width: `${aiPercent}%` }}
-                        className="bg-destructive transition-all duration-500"
-                        title={`AI Flagged: ${aiPercent}%`}
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                      <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                        <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Original Student Code</p>
-                        <p className="text-lg font-bold text-foreground mt-0.5">{humanSubmissions.length} files</p>
-                        <p className="text-[11px] text-muted-foreground">Within authentic human originality bounds</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20">
-                        <p className="text-xs text-destructive font-medium">Suspicious AI Synthesized</p>
-                        <p className="text-lg font-bold text-foreground mt-0.5">{aiSubmissions.length} files</p>
-                        <p className="text-[11px] text-muted-foreground">Elevated AST syntactic & stylometric flags</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-muted/40 border border-border">
-                        <p className="text-xs text-muted-foreground font-medium">Review Pipeline</p>
-                        <p className="text-lg font-bold text-foreground mt-0.5">{pendingReview.length} pending</p>
-                        <p className="text-[11px] text-muted-foreground">Awaiting teacher grading or comment</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="py-8 text-center text-sm text-muted-foreground">
-                    No code submissions logged yet. Once students submit their code, integrity distributions will render here automatically.
-                  </div>
-                )}
+              {/* Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
+                <span className="text-muted-foreground mr-1 hidden sm:inline">Filter:</span>
+                {(
+                  [
+                    ["all", "All"],
+                    ["ai", "AI Flagged"],
+                    ["human", "Human"],
+                    ["pending", "Pending"],
+                    ["graded", "Graded"],
+                  ] as const
+                ).map(([fKey, label]) => (
+                  <button
+                    key={fKey}
+                    onClick={() => setSubmissionFilter(fKey)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      submissionFilter === fKey
+                        ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                        : "text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* Main Content Grid: Submissions + Active Assignments */}
-              <div className="grid lg:grid-cols-3 gap-6">
-                {/* Recent Submissions Table */}
-                <div className="lg:col-span-2 bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden flex flex-col">
-                  <div className="px-5 py-4 border-b border-border/80 flex items-center justify-between">
-                    <div>
-                      <h2 className="text-base font-semibold text-foreground">Recent Submissions</h2>
-                      <p className="text-xs text-muted-foreground">
-                        {filteredSubmissions.length} of {totalSubmissions} submissions shown
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => setActiveTab("plagiarism")}>
-                      View Reports
-                    </Button>
-                  </div>
-
-                  <div className="divide-y divide-border/60 overflow-y-auto max-h-[500px]">
-                    {filteredSubmissions.length === 0 ? (
-                      <div className="p-8 text-center text-sm text-muted-foreground">
-                        No submissions match the current filter.
-                      </div>
-                    ) : (
-                      filteredSubmissions.slice(0, 10).map((sub) => {
-                        const sName = sub.student_name || sub.studentName || sub.student_email || "Student";
-                        const aTitle = sub.assignment_title || sub.assignmentTitle || "Assignment";
-                        const initials = sName
-                          .split(" ")
-                          .map((n) => n[0])
-                          .filter(Boolean)
-                          .join("")
-                          .slice(0, 2)
-                          .toUpperCase();
-                        const isAI = sub.aiLabel === "AI";
-                        const subId = sub.id || sub._id;
-
-                        return (
-                          <div
-                            key={subId}
-                            className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/40 transition-colors ${
-                              isAI ? "border-l-4 border-l-destructive bg-destructive/5" : ""
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-secondary/10 text-secondary flex items-center justify-center text-xs font-bold shrink-0">
-                                {initials || "ST"}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-medium text-sm text-foreground truncate">{sName}</p>
-                                <p className="text-xs text-muted-foreground truncate">{aTitle}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 self-end sm:self-auto">
-                              {sub.aiLabel && (
-                                <span
-                                  className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
-                                    isAI
-                                      ? "bg-destructive/15 text-destructive border border-destructive/25"
-                                      : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25"
-                                  }`}
-                                >
-                                  {sub.aiLabel} ({sub.aiConfidence ? Math.round(sub.aiConfidence * 100) : 0}%)
-                                </span>
-                              )}
-                              <span className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">
-                                {sub.status || "Submitted"}
-                              </span>
-                              <span className="text-xs font-semibold text-foreground w-12 text-right">
-                                {sub.score !== null && sub.score !== undefined ? `${sub.score}/100` : "—"}
-                              </span>
-                              <Link to={`/teacher/submission/${subId}`}>
-                                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                                  <Eye className="w-3.5 h-3.5" />
-                                  {sub.score === null || sub.score === undefined ? "Grade" : "Review"}
-                                </Button>
-                              </Link>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                {/* Active Assignments List (Now Connected to Backend) */}
-                <div className="bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden flex flex-col">
-                  <div className="px-5 py-4 border-b border-border/80 flex items-center justify-between">
-                    <div>
-                      <h2 className="text-base font-semibold text-foreground">Active Assignments</h2>
-                      <p className="text-xs text-muted-foreground">{assignments.length} total assignments</p>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={handleCreateAssignmentClick}>
-                      <PlusCircle className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  <div className="divide-y divide-border/60 p-2 space-y-2 overflow-y-auto max-h-[500px]">
-                    {assignments.length === 0 ? (
-                      <div className="p-6 text-center text-sm text-muted-foreground">
-                        <FileCode className="w-8 h-8 mx-auto text-muted-foreground/50 mb-2" />
-                        <p className="font-medium">No assignments yet</p>
-                        <p className="text-xs text-muted-foreground mt-1">Create assignments to collect student code</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleCreateAssignmentClick}
-                          className="mt-3 text-xs"
-                        >
-                          Create Assignment
-                        </Button>
-                      </div>
-                    ) : (
-                      assignments.map((assignment) => {
-                        const classTitle = classMap.get(assignment.course) || assignment.course_name || "General Course";
-                        const aSubmissions = submissions.filter(
-                          (s) => s.assignment_id === assignment.id || s.assignment_title === assignment.title
-                        );
-
-                        return (
-                          <div key={assignment.id} className="p-3 rounded-lg bg-muted/40 border border-border/50">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="font-semibold text-sm text-foreground">{assignment.title || assignment.name}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{classTitle}</p>
-                              </div>
-                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-medium shrink-0">
-                                #{assignment.assignment_number || 1}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground mt-3 pt-2 border-t border-border/40">
-                              <span>{aSubmissions.length} submissions</span>
-                              <span>
-                                {assignment.deadline
-                                  ? `Due: ${new Date(assignment.deadline).toLocaleDateString()}`
-                                  : "No due date"}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* TAB 2: ASSIGNMENTS VIEW */}
-          {activeTab === "assignments" && (
-            <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+            {/* Real Code Originality & Integrity Distribution */}
+            <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                 <div>
-                  <h2 className="text-xl font-bold text-foreground">Course Assignments</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Create and manage coding assignments across your registered classes
+                  <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                    Code Integrity & Plagiarism Distribution
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Real-time analysis powered by AST structural syntax tree & lexical stylometrics
                   </p>
                 </div>
-                <Button onClick={handleCreateAssignmentClick} className="gap-2">
-                  <PlusCircle className="w-4 h-4" />
-                  New Assignment
-                </Button>
+                <div className="flex items-center gap-4 text-xs font-medium">
+                  <span className="flex items-center gap-1.5 text-emerald-500">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Human: {humanPercent}% ({humanSubmissions.length})
+                  </span>
+                  <span className="flex items-center gap-1.5 text-destructive">
+                    <span className="w-2 h-2 rounded-full bg-destructive" />
+                    AI Flagged: {aiPercent}% ({aiSubmissions.length})
+                  </span>
+                </div>
               </div>
 
-              {assignments.length === 0 ? (
-                <div className="py-12 text-center text-sm text-muted-foreground">
-                  <FileCode className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
-                  <p className="text-base font-semibold text-foreground">No assignments created yet</p>
-                  <p className="mt-1">Click the button above to add your first coding assignment.</p>
+              {totalSubmissions > 0 ? (
+                <div className="space-y-3">
+                  <div className="w-full h-2.5 rounded-full bg-muted flex overflow-hidden">
+                    <div
+                      style={{ width: `${humanPercent}%` }}
+                      className="bg-emerald-500 transition-all duration-500"
+                      title={`Human Verified: ${humanPercent}%`}
+                    />
+                    <div
+                      style={{ width: `${aiPercent}%` }}
+                      className="bg-destructive transition-all duration-500"
+                      title={`AI Flagged: ${aiPercent}%`}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                    <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Original Student Code</p>
+                      <p className="text-base font-bold text-foreground mt-0.5">{humanSubmissions.length} files</p>
+                      <p className="text-[11px] text-muted-foreground">Within authentic human originality bounds</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+                      <p className="text-xs text-destructive font-medium">Suspicious AI Synthesized</p>
+                      <p className="text-base font-bold text-foreground mt-0.5">{aiSubmissions.length} files</p>
+                      <p className="text-[11px] text-muted-foreground">Elevated AST syntactic & stylometric flags</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted/40 border border-border/80">
+                      <p className="text-xs text-muted-foreground font-medium">Review Pipeline</p>
+                      <p className="text-base font-bold text-foreground mt-0.5">{pendingReview.length} pending</p>
+                      <p className="text-[11px] text-muted-foreground">Awaiting teacher grading or comment</p>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {assignments.map((assignment) => {
-                    const classTitle = classMap.get(assignment.course) || assignment.course_name || "Course";
-                    const aSubmissions = submissions.filter(
-                      (s) => s.assignment_id === assignment.id || s.assignment_title === assignment.title
-                    );
-                    const aiFlaggedCount = aSubmissions.filter((s) => s.aiLabel === "AI").length;
-
-                    return (
-                      <div
-                        key={assignment.id}
-                        className="bg-card rounded-xl border border-border/80 p-4 shadow-sm flex flex-col justify-between"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-semibold">
-                              Assignment #{assignment.assignment_number || 1}
-                            </span>
-                            {aiFlaggedCount > 0 && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/15 text-destructive font-semibold">
-                                {aiFlaggedCount} Flagged
-                              </span>
-                            )}
-                          </div>
-                          <h3 className="font-semibold text-foreground text-base">{assignment.title || assignment.name}</h3>
-                          <p className="text-xs text-muted-foreground mt-1">{classTitle}</p>
-                          {assignment.description && (
-                            <p className="text-xs text-muted-foreground/80 mt-2 line-clamp-2">
-                              {assignment.description}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground font-medium">
-                            {aSubmissions.length} submissions
-                          </span>
-                          <Link to={`/teacher/classes/${assignment.course}`}>
-                            <Button variant="outline" size="sm" className="h-8 text-xs">
-                              View Class
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  No code submissions logged yet. Once students submit their code, integrity distributions will render here automatically.
                 </div>
               )}
             </div>
-          )}
 
-          {/* TAB 3: STUDENTS MANAGEMENT */}
-          {activeTab === "students" && (
-            <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border">
-                <div>
-                  <h2 className="text-xl font-bold text-foreground">Enrolled Students</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Directory of registered students eligible for course enrollment
-                  </p>
+            {/* Main Content Grid: Submissions + Active Assignments */}
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Recent Submissions Table */}
+              <div className="lg:col-span-2 bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden flex flex-col">
+                <div className="px-5 py-4 border-b border-border/80 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">Recent Submissions</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {filteredSubmissions.length} of {totalSubmissions} submissions shown
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => handleTabChange("plagiarism")} className="text-xs h-8">
+                    View Reports
+                  </Button>
+                </div>
+
+                <div className="divide-y divide-border/60 overflow-y-auto max-h-[500px]">
+                  {filteredSubmissions.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-muted-foreground">
+                      No submissions match the current filter.
+                    </div>
+                  ) : (
+                    filteredSubmissions.slice(0, 10).map((sub) => {
+                      const sName = sub.student_name || sub.studentName || sub.student_email || "Student";
+                      const aTitle = sub.assignment_title || sub.assignmentTitle || "Assignment";
+                      const initials = sName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .filter(Boolean)
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase();
+                      const isAI = sub.aiLabel === "AI";
+                      const subId = sub.id || sub._id;
+
+                      return (
+                        <div
+                          key={subId}
+                          className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/40 transition-colors ${
+                            isAI ? "border-l-4 border-l-destructive bg-destructive/5" : ""
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-muted border border-border/80 flex items-center justify-center text-xs font-semibold text-foreground shrink-0">
+                              {initials || "ST"}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-xs sm:text-sm text-foreground truncate">{sName}</p>
+                              <p className="text-xs text-muted-foreground truncate">{aTitle}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 self-end sm:self-auto">
+                            {sub.aiLabel && (
+                              <span
+                                className={`text-xs px-2.5 py-0.5 rounded-md font-semibold ${
+                                  isAI
+                                    ? "bg-destructive/15 text-destructive border border-destructive/25"
+                                    : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25"
+                                }`}
+                              >
+                                {sub.aiLabel} ({sub.aiConfidence ? Math.round(sub.aiConfidence * 100) : 0}%)
+                              </span>
+                            )}
+                            <span className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">
+                              {sub.status || "Submitted"}
+                            </span>
+                            <span className="text-xs font-semibold text-foreground w-12 text-right">
+                              {sub.score !== null && sub.score !== undefined ? `${sub.score}/100` : "—"}
+                            </span>
+                            <Link to={`/teacher/submission/${subId}`}>
+                              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                                <Eye className="w-3.5 h-3.5" />
+                                {sub.score === null || sub.score === undefined ? "Grade" : "Review"}
+                              </Button>
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 
-              {/* Add Student Section */}
-              <div className="p-4 rounded-xl bg-muted/40 border border-border/80">
-                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                  <GraduationCap className="w-4 h-4 text-secondary" />
-                  Add New Student
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
-                  <Input
-                    placeholder="Full Name"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                  />
-                  <Input
-                    placeholder="student@university.edu"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                  />
-                  <select
-                    value={newDegree}
-                    onChange={(e) => setNewDegree(e.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-                  >
-                    <option value="">Select Degree Program</option>
-                    {STUDENT_PROGRAMS.map((program) => (
-                      <option key={program.value} value={program.value}>
-                        {program.label}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={newSemester}
-                    onChange={(e) => setNewSemester(e.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-                  >
-                    <option value="">Select Semester</option>
-                    {STUDENT_SEMESTERS.map((s) => (
-                      <option key={s} value={s}>
-                        Semester {s}
-                      </option>
-                    ))}
-                  </select>
+              {/* Active Assignments Column */}
+              <div className="bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden flex flex-col">
+                <div className="px-5 py-4 border-b border-border/80 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground">Active Assignments</h2>
+                    <p className="text-xs text-muted-foreground">{assignments.length} total assignments</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleCreateAssignmentClick} className="h-8 w-8 p-0">
+                    <PlusCircle className="w-4 h-4" />
+                  </Button>
                 </div>
-                <Button
-                  onClick={handleAddStudent}
-                  disabled={!newName.trim() || !newEmail.trim() || !newDegree || !newSemester}
-                  size="sm"
-                >
-                  Add Student to Registry
-                </Button>
-              </div>
 
-              {/* Filter controls */}
-              <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+                <div className="divide-y divide-border/60 p-2 space-y-2 overflow-y-auto max-h-[500px]">
+                  {assignments.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-muted-foreground">
+                      <FileCode className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                      <p className="font-semibold text-foreground">No assignments yet</p>
+                      <p className="text-xs text-muted-foreground mt-1">Create assignments to collect student code</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCreateAssignmentClick}
+                        className="mt-3 text-xs h-8"
+                      >
+                        Create Assignment
+                      </Button>
+                    </div>
+                  ) : (
+                    assignments.map((assignment) => {
+                      const classTitle = classMap.get(assignment.course) || assignment.course_name || "General Course";
+                      const aSubmissions = submissions.filter(
+                        (s) => s.assignment_id === assignment.id || s.assignment_title === assignment.title
+                      );
+
+                      return (
+                        <div key={assignment.id} className="p-3 rounded-lg bg-muted/40 border border-border/50">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-semibold text-xs sm:text-sm text-foreground">{assignment.title || assignment.name}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{classTitle}</p>
+                            </div>
+                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-semibold shrink-0">
+                              #{assignment.assignment_number || 1}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground mt-3 pt-2 border-t border-border/40">
+                            <span>{aSubmissions.length} submissions</span>
+                            <span>
+                              {assignment.deadline
+                                ? `Due: ${new Date(assignment.deadline).toLocaleDateString()}`
+                                : "No due date"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* TAB 2: ASSIGNMENTS VIEW */}
+        {activeTab === "assignments" && (
+          <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Course Assignments</h2>
+                <p className="text-xs text-muted-foreground">
+                  Create and manage coding assignments across your registered classes
+                </p>
+              </div>
+              <Button onClick={handleCreateAssignmentClick} className="gap-2 text-xs h-8">
+                <PlusCircle className="w-3.5 h-3.5" />
+                New Assignment
+              </Button>
+            </div>
+
+            {assignments.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted-foreground">
+                <FileCode className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
+                <p className="text-sm font-semibold text-foreground">No assignments created yet</p>
+                <p className="mt-1">Click the button above to add your first coding assignment.</p>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {assignments.map((assignment) => {
+                  const classTitle = classMap.get(assignment.course) || assignment.course_name || "Course";
+                  const aSubmissions = submissions.filter(
+                    (s) => s.assignment_id === assignment.id || s.assignment_title === assignment.title
+                  );
+                  const aiFlaggedCount = aSubmissions.filter((s) => s.aiLabel === "AI").length;
+
+                  return (
+                    <div
+                      key={assignment.id}
+                      className="bg-card rounded-xl border border-border/80 p-4 shadow-sm flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="text-xs px-2 py-0.5 rounded-md bg-primary/10 text-primary font-semibold">
+                            Assignment #{assignment.assignment_number || 1}
+                          </span>
+                          {aiFlaggedCount > 0 && (
+                            <span className="text-xs px-2 py-0.5 rounded-md bg-destructive/15 text-destructive font-semibold">
+                              {aiFlaggedCount} Flagged
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-semibold text-foreground text-sm">{assignment.title || assignment.name}</h3>
+                        <p className="text-xs text-muted-foreground mt-1">{classTitle}</p>
+                        {assignment.description && (
+                          <p className="text-xs text-muted-foreground/80 mt-2 line-clamp-2">
+                            {assignment.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {aSubmissions.length} submissions
+                        </span>
+                        <Link to={`/teacher/class/${assignment.course}`}>
+                          <Button variant="outline" size="sm" className="h-8 text-xs">
+                            View Class
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: STUDENTS MANAGEMENT */}
+        {activeTab === "students" && (
+          <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border">
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Enrolled Students</h2>
+                <p className="text-xs text-muted-foreground">
+                  Directory of registered students eligible for course enrollment
+                </p>
+              </div>
+            </div>
+
+            {/* Add Student Section */}
+            <div className="p-4 rounded-xl bg-muted/30 border border-border/80">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-primary" />
+                Add New Student to Directory
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
+                <Input
+                  placeholder="Full Name"
+                  className="h-9 text-xs"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                />
+                <Input
+                  placeholder="student@university.edu"
+                  className="h-9 text-xs"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                />
                 <select
-                  value={studentProgramFilter}
-                  onChange={(e) => setStudentProgramFilter(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm w-full sm:max-w-xs"
+                  value={newDegree}
+                  onChange={(e) => setNewDegree(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-card px-3 text-xs text-foreground"
                 >
-                  <option value="all">All Programs</option>
+                  <option value="">Select Degree Program</option>
                   {STUDENT_PROGRAMS.map((program) => (
                     <option key={program.value} value={program.value}>
                       {program.label}
                     </option>
                   ))}
-                  <option value={UNSPECIFIED_PROGRAM}>Unspecified Program</option>
                 </select>
-                <span className="text-xs text-muted-foreground">
-                  Showing {filteredStudents.length} of {students.length} students
-                </span>
-              </div>
-
-              {loading ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">Loading student directory...</div>
-              ) : error ? (
-                <div className="py-8 text-center text-sm text-destructive">{error}</div>
-              ) : filteredStudents.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">No students match this query.</div>
-              ) : (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {filteredStudents.map((s) => (
-                    <div key={s.email} className="p-3.5 rounded-xl border border-border/80 bg-card shadow-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-semibold text-sm text-foreground truncate">{s.name}</p>
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-medium shrink-0">
-                          {getStudentProgramLabel(s.degree)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1 truncate">{s.email}</p>
-                      {s.semester && (
-                        <p className="text-[11px] text-muted-foreground/80 mt-2">Semester {s.semester}</p>
-                      )}
-                    </div>
+                <select
+                  value={newSemester}
+                  onChange={(e) => setNewSemester(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-card px-3 text-xs text-foreground"
+                >
+                  <option value="">Select Semester</option>
+                  {STUDENT_SEMESTERS.map((s) => (
+                    <option key={s} value={s}>
+                      Semester {s}
+                    </option>
                   ))}
+                </select>
+              </div>
+              <Button
+                onClick={handleAddStudent}
+                disabled={!newName.trim() || !newEmail.trim() || !newDegree || !newSemester}
+                size="sm"
+                className="text-xs h-8"
+              >
+                Add Student to Registry
+              </Button>
+            </div>
+
+            {/* Filter controls */}
+            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+              <select
+                value={studentProgramFilter}
+                onChange={(e) => setStudentProgramFilter(e.target.value)}
+                className="h-8 rounded-md border border-input bg-card px-3 text-xs w-full sm:max-w-xs"
+              >
+                <option value="all">All Programs</option>
+                {STUDENT_PROGRAMS.map((program) => (
+                  <option key={program.value} value={program.value}>
+                    {program.label}
+                  </option>
+                ))}
+                <option value={UNSPECIFIED_PROGRAM}>Unspecified Program</option>
+              </select>
+              <span className="text-xs text-muted-foreground">
+                Showing {filteredStudents.length} of {students.length} students
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="py-8 text-center text-xs text-muted-foreground">Loading student directory...</div>
+            ) : error ? (
+              <div className="py-8 text-center text-xs text-destructive">{error}</div>
+            ) : filteredStudents.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground">No students match this query.</div>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredStudents.map((s) => (
+                  <div key={s.email} className="p-3.5 rounded-xl border border-border/80 bg-card shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-xs sm:text-sm text-foreground truncate">{s.name}</p>
+                      <span className="text-[11px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium shrink-0">
+                        {getStudentProgramLabel(s.degree)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">{s.email}</p>
+                    {s.semester && (
+                      <p className="text-[11px] text-muted-foreground/80 mt-2">Semester {s.semester}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: PLAGIARISM & INTEGRITY AUDIT */}
+        {activeTab === "plagiarism" && (
+          <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+              <div>
+                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-destructive" />
+                  Plagiarism & AI Detection Reports
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Full audit of flagged code submissions evaluated by the AST Code Intelligence engine
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-2 text-xs h-8">
+                <Download className="w-3.5 h-3.5" />
+                Export Plagiarism Audit
+              </Button>
+            </div>
+
+            <div className="divide-y divide-border/60">
+              {submissions.filter((s) => s.aiLabel === "AI").length === 0 ? (
+                <div className="py-12 text-center text-xs text-muted-foreground">
+                  <ShieldCheck className="w-10 h-10 mx-auto text-emerald-500 mb-2" />
+                  <p className="text-sm font-semibold text-foreground">Zero AI-flagged submissions</p>
+                  <p className="mt-1">All current submissions have satisfied human code originality criteria.</p>
                 </div>
+              ) : (
+                submissions
+                  .filter((s) => s.aiLabel === "AI")
+                  .map((sub) => {
+                    const sName = sub.student_name || sub.studentName || sub.student_email || "Student";
+                    const aTitle = sub.assignment_title || sub.assignmentTitle || "Assignment";
+                    const subId = sub.id || sub._id;
+
+                    return (
+                      <div key={subId} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs sm:text-sm text-foreground">{sName}</span>
+                            <span className="text-xs px-2 py-0.5 rounded-md bg-destructive/15 text-destructive font-bold">
+                              AI: {sub.aiConfidence ? Math.round(sub.aiConfidence * 100) : 95}% Confidence
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {aTitle} · Submitted: {sub.submitted_at || sub.createdAt || "Recent"}
+                          </p>
+                          <p className="text-xs text-muted-foreground/80 mt-1">
+                            Human Originality: {sub.humanPercentage ?? 5}% · Flagged for review
+                          </p>
+                        </div>
+                        <Link to={`/teacher/submission/${subId}`}>
+                          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
+                            <Eye className="w-3.5 h-3.5" />
+                            Inspect AI Code Analysis
+                          </Button>
+                        </Link>
+                      </div>
+                    );
+                  })
               )}
             </div>
-          )}
-
-          {/* TAB 4: PLAGIARISM & INTEGRITY AUDIT */}
-          {activeTab === "plagiarism" && (
-            <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
-                <div>
-                  <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-destructive" />
-                    Plagiarism & AI Detection Reports
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Full audit of flagged code submissions evaluated by the AST Code Intelligence engine
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-2">
-                  <Download className="w-4 h-4" />
-                  Export Plagiarism Audit
-                </Button>
-              </div>
-
-              <div className="divide-y divide-border/60">
-                {submissions.filter((s) => s.aiLabel === "AI").length === 0 ? (
-                  <div className="py-12 text-center text-sm text-muted-foreground">
-                    <ShieldCheck className="w-10 h-10 mx-auto text-emerald-500 mb-2" />
-                    <p className="text-base font-semibold text-foreground">Zero AI-flagged submissions</p>
-                    <p className="mt-1">All current submissions have satisfied human code originality criteria.</p>
-                  </div>
-                ) : (
-                  submissions
-                    .filter((s) => s.aiLabel === "AI")
-                    .map((sub) => {
-                      const sName = sub.student_name || sub.studentName || sub.student_email || "Student";
-                      const aTitle = sub.assignment_title || sub.assignmentTitle || "Assignment";
-                      const subId = sub.id || sub._id;
-
-                      return (
-                        <div key={subId} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm text-foreground">{sName}</span>
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/15 text-destructive font-bold">
-                                AI: {sub.aiConfidence ? Math.round(sub.aiConfidence * 100) : 95}% Confidence
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {aTitle} · Submitted: {sub.submitted_at || sub.createdAt || "Recent"}
-                            </p>
-                            <p className="text-xs text-muted-foreground/80 mt-1">
-                              Human Originality: {sub.humanPercentage ?? 5}% · Flagged for review
-                            </p>
-                          </div>
-                          <Link to={`/teacher/submission/${subId}`}>
-                            <Button variant="default" size="sm" className="gap-1.5 text-xs">
-                              <Eye className="w-3.5 h-3.5" />
-                              Inspect AI Code Analysis
-                            </Button>
-                          </Link>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
+          </div>
+        )}
+      </div>
+    </TeacherLayout>
   );
 };
 

@@ -54,7 +54,17 @@ const App = () => {
                 <ClassDetail />
               </ProtectedRoute>
             } />
+            <Route path="/teacher/classes/:classId" element={
+              <ProtectedRoute allowedRole="teacher">
+                <ClassDetail />
+              </ProtectedRoute>
+            } />
             <Route path="/teacher/create-assignment/:classId" element={
+              <ProtectedRoute allowedRole="teacher">
+                <CreateAssignment />
+              </ProtectedRoute>
+            } />
+            <Route path="/teacher/classes/:classId/assignments/new" element={
               <ProtectedRoute allowedRole="teacher">
                 <CreateAssignment />
               </ProtectedRoute>

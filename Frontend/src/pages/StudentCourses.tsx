@@ -2,10 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BookOpen, Bell, FileCode, Loader, LogOut, Settings, TrendingUp, Upload, Award, Users, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import BrandLogo from "@/components/BrandLogo";
-import ProfilePhoto from "@/components/ProfilePhoto";
-import AccountSettingsDialog from "@/components/AccountSettingsDialog";
-import MobileNavigation from "@/components/MobileNavigation";
+import StudentLayout from "@/components/StudentLayout";
 import { getStudentProgramLabel } from "@/lib/student-programs";
 import { getToken, getUser, logout, type AuthUser } from "@/lib/auth";
 
@@ -184,93 +181,26 @@ const StudentCourses = () => {
   const registeredCount = classes.filter((classRecord) => classRecord.enrolled).length;
 
   return (
-    <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-border bg-card p-4 lg:block">
-        <Link to="/" className="mb-8 flex items-center gap-2 px-2">
-          <BrandLogo className="h-10 w-10 object-contain" />
-          <span className="text-xl font-bold text-foreground">Codexa</span>
-        </Link>
-        <nav className="space-y-1">
-          {[
-            { icon: TrendingUp, label: "Overview", href: "/student/dashboard" },
-            { icon: FileCode, label: "My Assignments", href: "/student/dashboard#my-assignments" },
-            { icon: Upload, label: "Submit Code", href: "/student/submit" },
-            { icon: Award, label: "Grades", href: "/student/dashboard#your-progress" },
-            { icon: BookOpen, label: "My Courses", href: "/student/courses", active: true },
-          ].map((item) => (
-            <Link
-              key={item.label}
-              to={item.href}
-              aria-current={item.active ? "page" : undefined}
-              className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
-                item.active ? "bg-secondary/10 text-secondary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              <item.icon className="h-5 w-5" />
-              {item.label}
-            </Link>
-          ))}
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    <StudentLayout
+      title="My Courses"
+      subtitle={`${studentName} · ${user?.degree || "Student"}`}
+      activeNav="courses"
+      breadcrumbs={[{ label: "Student", href: "/student/dashboard" }, { label: "My Courses" }]}
+      actions={
+        notifications.length > 0 ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={() => document.getElementById("course-notifications")?.scrollIntoView({ behavior: "smooth" })}
           >
-            <Settings className="h-5 w-5" />
-            Settings
-          </button>
-        </nav>
-        <div className="absolute bottom-4 left-4 right-4">
-          <Link
-            to="/"
-            onClick={logout}
-            className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground transition-colors hover:text-destructive"
-          >
-            <LogOut className="h-5 w-5" />
-            Sign Out
-          </Link>
-        </div>
-      </aside>
-
-      <main className="lg:ml-64">
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm sm:px-6 sm:py-4">
-          <MobileNavigation
-            items={[
-              { label: "Overview", icon: TrendingUp, href: "/student/dashboard" },
-              { label: "My Assignments", icon: FileCode, href: "/student/dashboard#my-assignments" },
-              { label: "Submit Code", icon: Upload, href: "/student/submit" },
-              { label: "Grades and Progress", icon: Award, href: "/student/dashboard#your-progress" },
-              { label: "My Courses", icon: BookOpen, href: "/student/courses" },
-              { label: "Settings", icon: Settings, onSelect: () => setSettingsOpen(true) },
-              { label: "Sign Out", icon: LogOut, href: "/", onSelect: logout },
-            ]}
-          />
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-foreground sm:text-2xl">My Courses</h1>
-            <p className="truncate text-sm text-muted-foreground">
-              {studentName} · {user?.email || "Email unavailable"} · {user?.degree || "Degree not provided"}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-            <Button
-              variant="outline"
-              size="icon"
-              className="relative hidden sm:inline-flex"
-              aria-label={`${notifications.length} unread notifications`}
-              onClick={() => document.getElementById("course-notifications")?.scrollIntoView({ behavior: "smooth" })}
-              disabled={notifications.length === 0}
-            >
-              <Bell className="h-5 w-5" />
-              {notifications.length > 0 && (
-                <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
-                  {notifications.length}
-                </span>
-              )}
-            </Button>
-            <ProfilePhoto initials={initials} role="student" />
-          </div>
-        </header>
-
-        <div className="space-y-6 p-4 sm:p-6">
+            <Bell className="h-3.5 w-3.5" />
+            <span>{notifications.length} Invitations</span>
+          </Button>
+        ) : undefined
+      }
+    >
+      <div className="space-y-6">
           {(notifications.length > 0 || notificationsError) && (
             <section id="course-notifications" className="scroll-mt-24 rounded-2xl border border-secondary/20 bg-secondary/5 p-4 sm:p-6" aria-labelledby="course-notifications-title">
               <div className="mb-4 flex items-center justify-between gap-3">
@@ -432,9 +362,7 @@ const StudentCourses = () => {
             )}
           </section>
         </div>
-      </main>
-      <AccountSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} role="student" />
-    </div>
+      </StudentLayout>
   );
 };
 

@@ -13,7 +13,7 @@ import {
   Users,
   UserPlus,
 } from "lucide-react";
-import BrandLogo from "@/components/BrandLogo";
+import TeacherLayout from "@/components/TeacherLayout";
 import { downloadSubmissionCode } from "@/lib/api";
 
 interface Student {
@@ -162,59 +162,43 @@ const StudentListView = () => {
   const pendingCount = students.filter((s) => s.status === "pending").length;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:block">
-        <Link to="/" className="flex items-center gap-2 mb-8 px-2">
-          <BrandLogo className="w-10 h-10 object-contain" />
-          <span className="text-xl font-bold text-foreground">Codexa</span>
-        </Link>
-
-        <nav className="space-y-1">
-          <button
-            onClick={() => navigate("/teacher/classes")}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Classes
-          </button>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="lg:ml-64">
-        {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 z-10">
-          <button
-            onClick={() => navigate(-1)}
-            className="lg:hidden p-2 hover:bg-muted rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-bold text-foreground sm:text-2xl">
-              {assignment?.title}
-            </h1>
-            <p className="text-sm text-muted-foreground">{assignment?.className}</p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="shrink-0"
-            disabled={!assignment}
-            onClick={() => {
-              if (!assignment) return;
-              navigate(`/teacher/class/${assignment.classId}`, {
-                state: { openStudentManager: true },
-              });
-            }}
-          >
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Students
-          </Button>
-        </header>
-
-        <div className="p-4 sm:p-6">
+    <TeacherLayout
+      title={assignment?.title || "Assignment Submissions"}
+      subtitle={assignment?.className}
+      activeNav="myclasses"
+      backTo={{
+        label: assignment?.className ? `Back to ${assignment.className}` : "Back to Class",
+        href: assignment?.classId ? `/teacher/class/${assignment.classId}` : "/teacher/classes",
+      }}
+      breadcrumbs={[
+        { label: "My Classes", href: "/teacher/classes" },
+        {
+          label: assignment?.className || "Class",
+          href: assignment?.classId ? `/teacher/class/${assignment.classId}` : "/teacher/classes",
+        },
+        { label: assignment?.title || "Assignment" },
+        { label: "Submissions" },
+      ]}
+      actions={
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 h-8 text-xs gap-1.5"
+          disabled={!assignment}
+          onClick={() => {
+            if (!assignment) return;
+            navigate(`/teacher/class/${assignment.classId}`, {
+              state: { openStudentManager: true },
+            });
+          }}
+        >
+          <UserPlus className="h-3.5 w-3.5" />
+          <span>Add Students</span>
+        </Button>
+      }
+    >
+      <div className="space-y-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader className="w-8 h-8 text-muted-foreground animate-spin" />
@@ -430,8 +414,7 @@ const StudentListView = () => {
             </>
           )}
         </div>
-      </main>
-    </div>
+      </TeacherLayout>
   );
 };
 

@@ -4,7 +4,7 @@ import { ArrowLeft, Download, FileCode, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import BrandLogo from "@/components/BrandLogo";
+import TeacherLayout from "@/components/TeacherLayout";
 import { downloadSubmissionCode } from "@/lib/api";
 import { getToken, getUser } from "@/lib/auth";
 
@@ -130,36 +130,26 @@ const SubmissionReport = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <aside className="fixed left-0 top-0 bottom-0 hidden w-64 border-r border-border bg-card p-4 lg:block">
-        <Link to="/" className="mb-8 flex items-center gap-2 px-2">
-          <BrandLogo className="h-10 w-10 object-contain" />
-          <span className="text-xl font-bold text-foreground">Codexa</span>
-        </Link>
-        <Button variant="ghost" className="w-full justify-start" onClick={() => navigate(-1)}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-      </aside>
-
-      <main className="lg:ml-64">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm sm:gap-4 sm:px-6 sm:py-4">
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => navigate(-1)}>
-            <ArrowLeft className="h-5 w-5" />
+    <TeacherLayout
+      title="Submission Report"
+      subtitle={submission ? `${submission.studentName} · ${submission.assignmentTitle}` : "Code analysis and grading"}
+      activeNav="plagiarism"
+      backTo={{ label: "Back to Dashboard", href: "/teacher/dashboard" }}
+      breadcrumbs={[
+        { label: "Dashboard", href: "/teacher/dashboard" },
+        { label: "Plagiarism Reports", href: "/teacher/dashboard?tab=plagiarism" },
+        { label: submission?.studentName || "Report" },
+      ]}
+      actions={
+        submission && (
+          <Button onClick={handleDownload} disabled={downloading} size="sm" className="h-8 text-xs gap-1.5 shrink-0">
+            {downloading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            <span>Download code</span>
           </Button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-bold text-foreground sm:text-2xl">Submission report</h1>
-            <p className="hidden text-sm text-muted-foreground sm:block">Individual student submission and analysis</p>
-          </div>
-          {submission && (
-            <Button onClick={handleDownload} disabled={downloading} className="shrink-0 px-2 sm:px-4">
-              {downloading ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-              <span className="hidden sm:inline">Download code</span>
-            </Button>
-          )}
-        </header>
-
-        <div className="space-y-6 p-4 sm:p-6">
+        )
+      }
+    >
+      <div className="space-y-6">
           {loading ? (
             <div className="flex justify-center py-16">
               <Loader className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -283,8 +273,7 @@ const SubmissionReport = () => {
             </>
           )}
         </div>
-      </main>
-    </div>
+      </TeacherLayout>
   );
 };
 

@@ -11,7 +11,7 @@ import {
   AlertCircle,
   ArrowLeft,
 } from "lucide-react";
-import BrandLogo from "@/components/BrandLogo";
+import StudentLayout from "@/components/StudentLayout";
 import { getToken, getUser } from "@/lib/auth";
 
 interface AssignmentDetails {
@@ -173,49 +173,42 @@ const SubmitAssignment = () => {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center">
-          <div className="w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 className="w-10 h-10 text-accent" />
+      <StudentLayout
+        title="Assignment Submitted"
+        activeNav="submit"
+        breadcrumbs={[{ label: "Dashboard", href: "/student/dashboard" }, { label: "Submission Confirmed" }]}
+      >
+        <div className="max-w-md mx-auto text-center py-12">
+          <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-8 h-8 text-emerald-500" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Assignment Submitted!</h1>
-          <p className="text-muted-foreground mb-8">
-            Your submission for {assignment?.title || "this assignment"} has been received and is now visible to your teacher.
+          <h1 className="text-xl font-bold text-foreground mb-2">Assignment Submitted!</h1>
+          <p className="text-sm text-muted-foreground mb-6">
+            Your submission for {assignment?.title || "this assignment"} has been received and analyzed for originality.
           </p>
-          <div className="space-y-3">
-            <Link to="/student/dashboard">
-              <Button variant="hero" className="w-full">
-                Back to Dashboard
-              </Button>
-            </Link>
-          </div>
+          <Link to="/student/dashboard">
+            <Button className="w-full">
+              Back to Dashboard
+            </Button>
+          </Link>
         </div>
-      </div>
+      </StudentLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border px-4 py-3 sm:px-6 sm:py-4">
-        <div className="container mx-auto flex items-center gap-4">
-          <Link to="/student/dashboard" className="text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="flex min-w-0 items-center gap-2">
-            <BrandLogo className="h-9 w-9 shrink-0 object-contain sm:h-10 sm:w-10" />
-            <span className="truncate text-lg font-bold text-foreground sm:text-xl">Codexa</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8 max-w-3xl">
-        <div className="mb-8">
-          <h1 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">Submit Assignment</h1>
-          <p className="text-muted-foreground">
-            Submit your work for the selected class assignment.
-          </p>
-        </div>
+    <StudentLayout
+      title="Submit Assignment"
+      subtitle={assignment ? `${assignment.title} · ${assignment.course}` : "Upload your source code for analysis and grading"}
+      activeNav="submit"
+      backTo={{ label: "Back to Dashboard", href: "/student/dashboard" }}
+      breadcrumbs={[
+        { label: "Dashboard", href: "/student/dashboard" },
+        { label: "Submit Assignment" },
+        ...(assignment ? [{ label: assignment.title }] : []),
+      ]}
+    >
+      <div className="max-w-3xl space-y-6">
 
         {assignmentLoading ? (
           <div className="rounded-xl border border-border bg-card p-6 text-muted-foreground">
@@ -378,9 +371,9 @@ const SubmitAssignment = () => {
             </Link>
           </div>
         </form>
-        ) : null}
-      </main>
+      ) : null}
     </div>
+  </StudentLayout>
   );
 };
 

@@ -15,8 +15,7 @@ import {
   Copy,
   Trash2,
 } from "lucide-react";
-import BrandLogo from "@/components/BrandLogo";
-import MobileNavigation from "@/components/MobileNavigation";
+import TeacherLayout from "@/components/TeacherLayout";
 import { getToken } from "@/lib/auth";
 import {
   AlertDialog,
@@ -240,77 +239,19 @@ const MyClasses = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:block">
-        <Link to="/" className="flex items-center gap-2 mb-8 px-2">
-          <BrandLogo className="w-10 h-10 object-contain" />
-          <span className="text-xl font-bold text-foreground">Codexa</span>
-        </Link>
-
-        <nav className="space-y-1">
-          {[
-            { icon: BookOpen, label: "My Classes", id: "classes" },
-            { icon: Users, label: "Students", id: "students" },
-            { icon: Settings, label: "Settings", id: "settings" },
-          ].map((item) => (
-            <button
-              key={item.id}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                item.id === "classes"
-                  ? "bg-secondary/10 text-secondary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="absolute bottom-4 left-4 right-4">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:text-destructive transition-colors w-full"
-          >
-            <LogOut className="w-5 h-5" />
-            Sign Out
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="lg:ml-64">
-        {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 z-10">
-          <MobileNavigation
-            items={[
-              { label: "My Classes", icon: BookOpen, href: "/teacher/classes" },
-              { label: "Teacher Dashboard", icon: Users, href: "/teacher/dashboard" },
-              { label: "Sign Out", icon: LogOut, href: "/teacher/login", onSelect: handleLogout },
-            ]}
-          />
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground">My Classes</h1>
-            <p className="text-sm text-muted-foreground">
-              Manage your courses and assignments
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-            <Button onClick={openCreateForm} className="flex items-center gap-2 px-3 sm:px-4">
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Create Class</span>
-            </Button>
-            <Button variant="outline" size="icon">
-              <Bell className="w-5 h-5" />
-            </Button>
-            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
-              T
-            </div>
-          </div>
-        </header>
-
-        <div className="p-4 sm:p-6">
+    <TeacherLayout
+      title="My Classes"
+      subtitle="Manage your courses and assignments"
+      activeNav="myclasses"
+      breadcrumbs={[{ label: "Teacher", href: "/teacher/dashboard" }, { label: "My Classes" }]}
+      actions={
+        <Button onClick={openCreateForm} className="gap-1.5 text-xs h-8">
+          <Plus className="w-3.5 h-3.5" />
+          <span>Create Class</span>
+        </Button>
+      }
+    >
+      <div className="space-y-6">
           {deleteError && (
             <p className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive" role="alert">
               {deleteError}
@@ -577,7 +518,6 @@ const MyClasses = () => {
             <p className="mt-4 text-sm text-destructive" role="alert">{copyError}</p>
           )}
         </div>
-      </main>
       <AlertDialog
         open={classToDelete !== null}
         onOpenChange={(open) => {
@@ -606,7 +546,7 @@ const MyClasses = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </TeacherLayout>
   );
 };
 

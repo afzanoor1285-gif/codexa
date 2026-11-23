@@ -15,7 +15,7 @@ import {
   Loader,
   UserPlus,
 } from "lucide-react";
-import BrandLogo from "@/components/BrandLogo";
+import TeacherLayout from "@/components/TeacherLayout";
 
 interface Assignment {
   id: string;
@@ -322,63 +322,38 @@ const ClassDetail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:block">
-        <Link to="/" className="flex items-center gap-2 mb-8 px-2">
-          <BrandLogo className="w-10 h-10 object-contain" />
-          <span className="text-xl font-bold text-foreground">Codexa</span>
-        </Link>
-
-        <nav className="space-y-1">
-          <button
-            onClick={() => navigate("/teacher/classes")}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
+    <TeacherLayout
+      title={classData ? `${classData.name} (${classData.code})` : "Class Details"}
+      subtitle={classData?.section}
+      activeNav="myclasses"
+      backTo={{ label: "My Classes", href: "/teacher/classes" }}
+      breadcrumbs={[
+        { label: "My Classes", href: "/teacher/classes" },
+        { label: classData ? `${classData.name}` : "Class Details" },
+      ]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void openStudentManager()}
+            className="flex items-center gap-1.5 h-8 text-xs"
           >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Classes
-          </button>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="lg:ml-64">
-        {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 z-10">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate("/teacher/classes")}
-              className="lg:hidden p-2 hover:bg-muted rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-lg font-bold text-foreground sm:text-2xl">
-                {classData?.name} - {classData?.code}
-              </h1>
-              <p className="text-sm text-muted-foreground">{classData?.section}</p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => void openStudentManager()}
-              className="flex items-center gap-2 px-3 sm:px-4"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Students</span>
-            </Button>
-            <Button
-              onClick={handleCreateAssignment}
-              className="flex items-center gap-2 px-3 sm:px-4"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Create Assignment</span>
-            </Button>
-          </div>
-        </header>
-
-        <div className="p-4 sm:p-6">
+            <UserPlus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Add Students</span>
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleCreateAssignment}
+            className="flex items-center gap-1.5 h-8 text-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Create Assignment</span>
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-6">
           {manageStudentsOpen && (
             <section className="mb-6 rounded-2xl border border-border bg-card p-4 sm:p-6" aria-labelledby="manage-students-title">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -585,8 +560,7 @@ const ClassDetail = () => {
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </TeacherLayout>
   );
 };
 

@@ -10,7 +10,7 @@ import {
   FileText,
   Pen,
 } from "lucide-react";
-import BrandLogo from "@/components/BrandLogo";
+import TeacherLayout from "@/components/TeacherLayout";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000";
 
@@ -150,52 +150,25 @@ const CreateAssignment = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:block">
-        <Link to="/" className="flex items-center gap-2 mb-8 px-2">
-          <BrandLogo className="w-10 h-10 object-contain" />
-          <span className="text-xl font-bold text-foreground">Codexa</span>
-        </Link>
-
-        <nav className="space-y-1">
-          <button
-            onClick={() => navigate("/teacher/classes")}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Classes
-          </button>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="lg:ml-64">
-        {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 z-10">
-          <button
-            onClick={() => navigate(`/teacher/class/${classId}`)}
-            className="lg:hidden p-2 hover:bg-muted rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-foreground sm:text-2xl">
-              Create Assignment
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {numberLoading
-                ? "Checking the next assignment number..."
-                : assignmentNumber
-                  ? `This will be Assignment ${assignmentNumber} for this class.`
-                  : "Assignment numbering is unavailable until the class is verified."}
-            </p>
-          </div>
-        </header>
-
-        <div className="p-4 sm:p-6">
-          <div className="max-w-2xl">
-            <form onSubmit={handleSubmit} className="space-y-6">
+    <TeacherLayout
+      title="Create Assignment"
+      subtitle={
+        numberLoading
+          ? "Checking the next assignment number..."
+          : assignmentNumber
+            ? `Assignment #${assignmentNumber} for this class`
+            : "Set details and deadlines for this coding task"
+      }
+      activeNav="myclasses"
+      backTo={{ label: "Back to Class", href: `/teacher/class/${classId}` }}
+      breadcrumbs={[
+        { label: "My Classes", href: "/teacher/classes" },
+        { label: "Class", href: `/teacher/class/${classId}` },
+        { label: "Create Assignment" },
+      ]}
+    >
+      <div className="max-w-2xl">
+        <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
                 <div className="bg-destructive/10 text-destructive rounded-lg p-4 flex items-start gap-3">
                   <FileText className="w-5 h-5 mt-0.5 flex-shrink-0" />
@@ -304,9 +277,7 @@ const CreateAssignment = () => {
               </div>
             </form>
           </div>
-        </div>
-      </main>
-    </div>
+        </TeacherLayout>
   );
 };
 

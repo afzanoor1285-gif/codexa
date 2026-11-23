@@ -30,10 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import BrandLogo from "@/components/BrandLogo";
-import ProfilePhoto from "@/components/ProfilePhoto";
-import AccountSettingsDialog from "@/components/AccountSettingsDialog";
-import MobileNavigation from "@/components/MobileNavigation";
+import StudentLayout from "@/components/StudentLayout";
 
 interface Assignment {
   id: string;
@@ -291,8 +288,11 @@ const StudentDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <AccountSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} role="student" />
+    <StudentLayout
+      title="Student Dashboard"
+      subtitle={`Welcome back, ${studentName} · ${user?.degree || "Student"}`}
+      activeNav="overview"
+    >
       <Dialog
         open={selectedAssignment !== null}
         onOpenChange={(open) => {
@@ -338,100 +338,8 @@ const StudentDashboard = () => {
           )}
         </DialogContent>
       </Dialog>
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:block">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 mb-8 px-2">
-          <BrandLogo className="w-10 h-10 object-contain" />
-          <span className="text-xl font-bold text-foreground">Codexa</span>
-        </Link>
 
-        {/* Navigation */}
-        <nav className="space-y-1">
-          {[
-            { icon: TrendingUp, label: "Overview", active: true },
-            { icon: FileCode, label: "My Assignments", active: false },
-            { icon: Upload, label: "Submit Code", active: false, href: "/student/submit" },
-            { icon: Award, label: "Grades", active: false },
-            { icon: BookOpen, label: "My Courses", active: false, href: "/student/courses" },
-            { icon: Settings, label: "Settings", active: false },
-          ].map((item) => (
-            item.href ? (
-              <Link
-                key={item.label}
-                to={item.href}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                  item.active
-                    ? "bg-secondary/10 text-secondary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                {item.label}
-              </Link>
-            ) : (
-              <button
-                key={item.label}
-                onClick={() => {
-                  if (item.label === "Settings") setSettingsOpen(true);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                  item.active
-                    ? "bg-secondary/10 text-secondary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                {item.label}
-              </button>
-            )
-          ))}
-        </nav>
-
-        {/* Bottom */}
-        <div className="absolute bottom-4 left-4 right-4">
-          <Link
-            to="/"
-            onClick={logout}
-            className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:text-destructive transition-colors"
-          >
-            <LogOut className="w-5 h-5" />
-            Sign Out
-          </Link>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="lg:ml-64">
-        {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 justify-between z-10">
-          <MobileNavigation
-            items={[
-              { label: "Overview", icon: TrendingUp, href: "/student/dashboard" },
-              { label: "My Assignments", icon: FileCode, href: "/student/dashboard#my-assignments" },
-              { label: "Submit Code", icon: Upload, href: "/student/submit" },
-              { label: "Grades and Progress", icon: Award, href: "/student/dashboard#your-progress" },
-              { label: "My Courses", icon: BookOpen, href: "/student/courses" },
-              { label: "Settings", icon: Settings, onSelect: () => setSettingsOpen(true) },
-              { label: "Sign Out", icon: LogOut, href: "/", onSelect: logout },
-            ]}
-          />
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Student Dashboard</h1>
-            <p className="text-sm text-muted-foreground">
-              <span className="block truncate">Welcome back, {studentName} · {user?.email || "Email unavailable"} · {user?.degree || "Degree not provided"}</span>
-            </p>
-            {user?.bio && <p className="mt-1 max-w-xl text-sm text-muted-foreground">{user.bio}</p>}
-          </div>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-            <Button variant="outline" size="icon" className="hidden sm:inline-flex">
-              <Bell className="w-5 h-5" />
-            </Button>
-            <ProfilePhoto initials={initials} role="student" />
-          </div>
-        </header>
-
-        <div className="p-4 sm:p-6">
+      <div className="space-y-6">
           {/* Stats Grid */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {stats.map((stat) => (
@@ -668,8 +576,7 @@ const StudentDashboard = () => {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </StudentLayout>
   );
 };
 
