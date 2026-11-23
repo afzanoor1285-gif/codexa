@@ -23,6 +23,13 @@ import ProfilePhoto from "@/components/ProfilePhoto";
 import AccountSettingsDialog from "@/components/AccountSettingsDialog";
 import MobileNavigation from "@/components/MobileNavigation";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getUser, logout } from "@/lib/auth";
 import {
   getStudentProgramLabel,
@@ -38,6 +45,41 @@ interface Student {
   email: string;
   degree?: string | null;
   semester?: number | null;
+}
+
+interface TeacherClass {
+  id: string;
+  name: string;
+  code: string;
+  section: string;
+}
+
+interface ClassAssignmentsResponse {
+  class: {
+    studentEmails: string[];
+  };
+  assignments: Array<{
+    id: string;
+    title: string;
+  }>;
+}
+
+interface AssignmentSubmissionsResponse {
+  assignment: {
+    title: string;
+  };
+  submissions: Array<{
+    name: string;
+    email: string;
+    status: string;
+    enrollmentStatus: string;
+    submittedAt: string | null;
+    score: number | null;
+    aiLabel: string | null;
+    aiPercentage: number | null;
+    humanPercentage: number | null;
+    aiConfidence: number | null;
+  }>;
 }
 
 const TeacherDashboard = () => {
@@ -70,6 +112,159 @@ const TeacherDashboard = () => {
   const [newSemester, setNewSemester] = useState('');
   const [studentProgramFilter, setStudentProgramFilter] = useState('all');
   const [studentSearch, setStudentSearch] = useState('');
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportClasses, setExportClasses] = useState<TeacherClass[]>([]);
+  const [selectedExportClassId, setSelectedExportClassId] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const openExportDialog = async () => {
+    setExportDialogOpen(true);
+    setExportLoading(true);
+    setExportError(null);
+    setExportClasses([]);
+    setSelectedExportClassId("");
+    try {
+      const token = localStorage.getItem("codexa_token");
+      const response = await fetch(`${API_BASE_URL}/api/classes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load your classes");
+      const classes = (data.classes || []) as TeacherClass[];
+      setExportClasses(classes);
+      setSelectedExportClassId(classes[0]?.id || "");
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Unable to load your classes");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const exportClassReport = async () => {
+    const selectedClass = exportClasses.find((classRecord) => classRecord.id === selectedExportClassId);
+    if (!selectedClass) return;
+
+    setExportLoading(true);
+    setExportError(null);
+    try {
+      const token = localStorage.getItem("codexa_token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const [classResponse, studentsResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/classes/${selectedClass.id}/assignments`, { headers }),
+        fetch(`${API_BASE_URL}/api/students`, { headers }),
+      ]);
+      const [classData, studentsData] = await Promise.all([
+        classResponse.json(),
+        studentsResponse.json(),
+      ]);
+      if (!classResponse.ok) throw new Error(classData.error || "Unable to load class assignments");
+      if (!studentsResponse.ok) throw new Error(studentsData.error || "Unable to load student details");
+
+      const studentDirectory = new Map<string, Student>(
+        ((studentsData.students || []) as Student[]).map((student) => [student.email.toLowerCase(), student]),
+      );
+      const reportRows: (string | number)[][] = [[
+        "Student Name",
+        "Email",
+        "Program",
+        "Semester",
+        "Class",
+        "Assignment",
+        "Submission Status",
+        "Enrollment Status",
+        "Submitted At",
+        "Score",
+        "AI Label",
+        "AI Percentage",
+        "Human Percentage",
+        "AI Confidence",
+      ]];
+      const assignments = (classData as ClassAssignmentsResponse).assignments;
+
+      if (assignments.length === 0) {
+        (classData as ClassAssignmentsResponse).class.studentEmails.forEach((email) => {
+          const student = studentDirectory.get(email.toLowerCase());
+          reportRows.push([
+            student?.name || email,
+            email,
+            getStudentProgramLabel(student?.degree),
+            student?.semester ?? "",
+            `${selectedClass.code} - ${selectedClass.section}`,
+            "",
+            "No assignments",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+          ]);
+        });
+      } else {
+        const assignmentReports = await Promise.all(assignments.map(async (assignment) => {
+          const response = await fetch(
+            `${API_BASE_URL}/api/assignments/${assignment.id}/submissions`,
+            { headers },
+          );
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || `Unable to load ${assignment.title}`);
+          return data as AssignmentSubmissionsResponse;
+        }));
+
+        assignmentReports.forEach((assignmentReport) => {
+          assignmentReport.submissions.forEach((submission) => {
+            const student = studentDirectory.get(submission.email.toLowerCase());
+            reportRows.push([
+              submission.name || student?.name || submission.email,
+              submission.email,
+              getStudentProgramLabel(student?.degree),
+              student?.semester ?? "",
+              `${selectedClass.code} - ${selectedClass.section}`,
+              assignmentReport.assignment.title,
+              submission.status,
+              submission.enrollmentStatus,
+              submission.submittedAt || "",
+              submission.score ?? "",
+              submission.aiLabel || "",
+              submission.aiPercentage ?? "",
+              submission.humanPercentage ?? "",
+              submission.aiConfidence ?? "",
+            ]);
+          });
+        });
+      }
+
+      const safeClassName = Array.from(`${selectedClass.code}-${selectedClass.section}`)
+        .map((character) => (
+          character.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(character) ? "-" : character
+        ))
+        .join("")
+        .replace(/\s+/g, "-");
+      const csvRows = reportRows.map((row) => row.map((value) => {
+        let cell = String(value);
+        if (typeof value === "string" && /^[\t\r\n ]*[=+\-@]/.test(cell)) {
+          cell = `'${cell}`;
+        }
+        return `"${cell.replace(/"/g, '""')}"`;
+      }).join(","));
+      const file = new Blob([`\uFEFF${csvRows.join("\r\n")}`], {
+        type: "text/csv;charset=utf-8",
+      });
+      const downloadUrl = URL.createObjectURL(file);
+      const downloadLink = document.createElement("a");
+      downloadLink.href = downloadUrl;
+      downloadLink.download = `${safeClassName}-report.csv`;
+      downloadLink.click();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+      setExportDialogOpen(false);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Unable to export this class report");
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (activeTab === "students") {
@@ -194,6 +389,50 @@ const TeacherDashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <AccountSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} role="teacher" />
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Export class report</DialogTitle>
+            <DialogDescription>
+              Select a class to download its student and assignment report as an Excel-compatible spreadsheet.
+            </DialogDescription>
+          </DialogHeader>
+          {exportLoading && exportClasses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Loading your classes...</p>
+          ) : exportClasses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No classes are available to export.</p>
+          ) : (
+            <label className="block space-y-2 text-sm font-medium">
+              Class
+              <select
+                value={selectedExportClassId}
+                onChange={(event) => setSelectedExportClassId(event.target.value)}
+                disabled={exportLoading}
+                className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {exportClasses.map((classRecord) => (
+                  <option key={classRecord.id} value={classRecord.id}>
+                    {classRecord.code} - {classRecord.section} ({classRecord.name})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {exportError && <p role="alert" className="text-sm text-destructive">{exportError}</p>}
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setExportDialogOpen(false)} disabled={exportLoading}>
+              Cancel
+            </Button>
+            <Button
+              onClick={exportClassReport}
+              disabled={exportLoading || exportClasses.length === 0 || !selectedExportClassId}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exportLoading ? "Preparing..." : "Download Excel CSV"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:block">
         {/* Logo */}
@@ -419,7 +658,7 @@ const TeacherDashboard = () => {
               <Upload className="w-4 h-4 mr-2" />
               Create Assignment
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => void openExportDialog()}>
               <Download className="w-4 h-4 mr-2" />
               Export Reports
             </Button>
