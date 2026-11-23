@@ -64,8 +64,14 @@ const ClassDetail = () => {
       );
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to fetch class data");
+        let errorMsg = "Failed to fetch class data";
+        try {
+          const errData = await response.json();
+          errorMsg = errData.error || errorMsg;
+        } catch {
+          errorMsg = `Server error (${response.status}): ${response.statusText}`;
+        }
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();

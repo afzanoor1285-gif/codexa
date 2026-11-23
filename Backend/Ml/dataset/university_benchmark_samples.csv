@@ -1,0 +1,416 @@
+problem_id,code,label
+uni_factorial,"def factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n - 1)",0
+uni_factorial_iter,"def fact(num):
+    res = 1
+    for i in range(1, num + 1):
+        res = res * i
+    return res",0
+uni_bubble_sort,"def bubble_sort(arr):
+    n = len(arr)
+    for i in range(n):
+        for j in range(0, n - i - 1):
+            if arr[j] > arr[j + 1]:
+                arr[j], arr[j + 1] = arr[j + 1], arr[j]
+    return arr",0
+uni_linear_search,"def search(lst, target):
+    for i in range(len(lst)):
+        if lst[i] == target:
+            return i
+    return -1",0
+uni_binary_search,"def bin_search(arr, x):
+    l = 0
+    r = len(arr) - 1
+    while l <= r:
+        mid = (l + r) // 2
+        if arr[mid] == x:
+            return mid
+        elif arr[mid] < x:
+            l = mid + 1
+        else:
+            r = mid - 1
+    return -1",0
+uni_student_class,"class Student:
+    def __init__(self, name, roll_no):
+        self.name = name
+        self.roll_no = roll_no
+    def show(self):
+        print(self.name, self.roll_no)",0
+uni_rect_class,"class Rectangle:
+    def __init__(self, w, h):
+        self.w = w
+        self.h = h
+    def area(self):
+        return self.w * self.h",0
+uni_palindrome,"def is_palindrome(s):
+    s = s.lower().replace(' ', '')
+    return s == s[::-1]",0
+uni_fibonacci,"def fib(n):
+    a, b = 0, 1
+    for _ in range(n):
+        print(a)
+        a, b = b, a + b",0
+uni_file_io,"def count_words(fname):
+    with open(fname, 'r') as f:
+        text = f.read()
+    return len(text.split())",0
+uni_matrix_add,"def add_matrix(A, B):
+    rows = len(A)
+    cols = len(A[0])
+    C = []
+    for i in range(rows):
+        row = []
+        for j in range(cols):
+            row.append(A[i][j] + B[i][j])
+        C.append(row)
+    return C",0
+uni_prime_check,"def is_prime(n):
+    if n < 2:
+        return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
+            return False
+    return True",0
+uni_dict_count,"def count_chars(s):
+    counts = {}
+    for c in s:
+        if c in counts:
+            counts[c] += 1
+        else:
+            counts[c] = 1
+    return counts",0
+uni_selection_sort,"def selection_sort(a):
+    for i in range(len(a)):
+        min_idx = i
+        for j in range(i + 1, len(a)):
+            if a[j] < a[min_idx]:
+                min_idx = j
+        a[i], a[min_idx] = a[min_idx], a[i]
+    return a",0
+uni_queue,"class Queue:
+    def __init__(self):
+        self.items = []
+    def enqueue(self, x):
+        self.items.append(x)
+    def dequeue(self):
+        if len(self.items) > 0:
+            return self.items.pop(0)
+        return None",0
+uni_stack,"class Stack:
+    def __init__(self):
+        self.data = []
+    def push(self, val):
+        self.data.append(val)
+    def pop(self):
+        return self.data.pop() if self.data else None",0
+uni_avg_calc,"def get_average(nums):
+    if not nums:
+        return 0
+    return sum(nums) / len(nums)",0
+uni_gcd,"def gcd(a, b):
+    while b != 0:
+        a, b = b, a % b
+    return a",0
+uni_lcm,"def lcm(a, b):
+    return (a * b) // gcd(a, b)",0
+uni_vowels,"def remove_vowels(s):
+    vowels = 'aeiouAEIOU'
+    res = ''
+    for ch in s:
+        if ch not in vowels:
+            res += ch
+    return res",0
+uni_min_max,"def find_min_max(arr):
+    mn = arr[0]
+    mx = arr[0]
+    for x in arr[1:]:
+        if x < mn: mn = x
+        if x > mx: mx = x
+    return mn, mx",0
+uni_reverse_list,"def rev_list(lst):
+    rev = []
+    for i in range(len(lst)-1, -1, -1):
+        rev.append(lst[i])
+    return rev",0
+ai_factorial,"def calculate_factorial(number: int) -> int:
+    """"""Calculate the factorial of a non-negative integer.""""""
+    if number < 0:
+        raise ValueError('Number must be non-negative')
+    if number in (0, 1):
+        return 1
+    result = 1
+    for i in range(2, number + 1):
+        result *= i
+    return result",1
+ai_binary_search,"from typing import List
+
+def binary_search(array: List[int], target: int) -> int:
+    """"""Find target index in sorted array using binary search.""""""
+    low = 0
+    high = len(array) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if array[mid] == target:
+            return mid
+        elif array[mid] < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return -1",1
+ai_student_class,"class StudentRecord:
+    """"""Represents an enrolled student with identification details.""""""
+    def __init__(self, full_name: str, roll_number: int) -> None:
+        self.full_name = full_name
+        self.roll_number = roll_number
+
+    def get_details(self) -> dict:
+        return {'name': self.full_name, 'roll_number': self.roll_number}",1
+ai_palindrome,"import re
+
+def is_palindrome(text: str) -> bool:
+    """"""Check if given string is a palindrome ignoring non-alphanumeric characters.""""""
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '', text).lower()
+    return sanitized == sanitized[::-1]",1
+ai_word_count,"from collections import Counter
+from pathlib import Path
+
+def analyze_word_frequency(filepath: Path) -> dict[str, int]:
+    """"""Read file and return dictionary of word counts.""""""
+    content = Path(filepath).read_text(encoding='utf-8')
+    words = content.lower().split()
+    return dict(Counter(words))",1
+ai_matrix_ops,"from typing import List
+
+def add_matrices(matrix_a: List[List[float]], matrix_b: List[List[float]]) -> List[List[float]]:
+    """"""Element-wise addition of two 2D matrices.""""""
+    return [
+        [val_a + val_b for val_a, val_b in zip(row_a, row_b)]
+        for row_a, row_b in zip(matrix_a, matrix_b)
+    ]",1
+ai_prime_check,"import math
+
+def is_prime_number(number: int) -> bool:
+    """"""Determine if a positive integer is prime.""""""
+    if number <= 1:
+        return False
+    if number <= 3:
+        return True
+    if number % 2 == 0 or number % 3 == 0:
+        return False
+    for i in range(5, int(math.isqrt(number)) + 1, 6):
+        if number % i == 0 or number % (i + 2) == 0:
+            return False
+    return True",1
+ai_dict_comp,"from typing import Dict, List
+
+def aggregate_categories(items: List[str]) -> Dict[str, int]:
+    """"""Count occurrences of each unique item in list.""""""
+    return {item: items.count(item) for item in set(items)}",1
+ai_quicksort,"from typing import List
+
+def quicksort(elements: List[int]) -> List[int]:
+    """"""Sort a list of integers using the quicksort algorithm.""""""
+    if len(elements) <= 1:
+        return elements
+    pivot = elements[len(elements) // 2]
+    left = [x for x in elements if x < pivot]
+    middle = [x for x in elements if x == pivot]
+    right = [x for x in elements if x > pivot]
+    return quicksort(left) + middle + quicksort(right)",1
+ai_queue,"from typing import Any, Optional
+from collections import deque
+
+class Queue:
+    """"""FIFO Queue implementation backed by collections.deque.""""""
+    def __init__(self) -> None:
+        self._items: deque[Any] = deque()
+    def enqueue(self, item: Any) -> None:
+        self._items.append(item)
+    def dequeue(self) -> Optional[Any]:
+        return self._items.popleft() if self._items else None",1
+ai_stack,"from typing import Generic, TypeVar, Optional
+T = TypeVar('T')
+class Stack(Generic[T]):
+    def __init__(self) -> None:
+        self._container: list[T] = []
+    def push(self, element: T) -> None:
+        self._container.append(element)
+    def pop(self) -> Optional[T]:
+        return self._container.pop() if self._container else None",1
+ai_json_validator,"import json
+from typing import Any, Dict
+
+def safe_parse_json(raw_data: str) -> Dict[str, Any]:
+    """"""Safely parse JSON string returning an empty dict on error.""""""
+    try:
+        return json.loads(raw_data)
+    except (json.JSONDecodeError, TypeError):
+        return {}",1
+h_sum_list,"numbers = [1, 2, 3, 4, 5]
+total = 0
+for n in numbers:
+    total = total + n
+print(total)",0
+h_area_circle,"import math
+def get_circle_area(radius):
+    return math.pi * radius * radius",0
+h_celsius_to_fahr,"def c_to_f(c):
+    return (c * 9/5) + 32
+temp = float(input('Enter temp in C: '))
+print('In F:', c_to_f(temp))",0
+h_max_of_three,"def max_three(a, b, c):
+    if a >= b and a >= c:
+        return a
+    elif b >= a and b >= c:
+        return b
+    else:
+        return c",0
+h_count_vowels,"def get_vowel_count(s):
+    cnt = 0
+    for char in s.lower():
+        if char in 'aeiou':
+            cnt += 1
+    return cnt",0
+h_simple_calculator,"def calc(a, b, op):
+    if op == '+': return a + b
+    if op == '-': return a - b
+    if op == '*': return a * b
+    if op == '/': return a / b if b != 0 else 0",0
+h_multiplication_table,"n = int(input())
+for i in range(1, 11):
+    print(f'{n} x {i} = {n*i}')",0
+h_even_odd,"def check_even(num):
+    if num % 2 == 0:
+        return 'Even'
+    return 'Odd'",0
+h_linear_search_simple,"def find_item(lst, val):
+    for i in range(len(lst)):
+        if lst[i] == val:
+            return i
+    return -1",0
+h_reverse_string,"def reverse_str(text):
+    return text[::-1]",0
+h_list_comprehension,"squares = [x * x for x in range(10) if x % 2 == 0]
+print(squares)",0
+h_dict_frequency,"word = 'programming'
+freq = {}
+for ch in word:
+    freq[ch] = freq.get(ch, 0) + 1
+print(freq)",0
+h_oop_car,"class Car:
+    def __init__(self, brand, year):
+        self.brand = brand
+        self.year = year
+    def drive(self):
+        print(self.brand, 'is driving')",0
+h_file_lines,"with open('file.txt') as f:
+    for line in f:
+        print(line.strip())",0
+h_min_element,"def find_min(arr):
+    m = arr[0]
+    for x in arr:
+        if x < m:
+            m = x
+    return m",0
+h_sum_digits,"def sum_digits(n):
+    s = 0
+    while n > 0:
+        s += n % 10
+        n //= 10
+    return s",0
+h_swap_vars,"def swap(a, b):
+    return b, a",0
+h_remove_duplicates,"def unique_elements(items):
+    res = []
+    for item in items:
+        if item not in res:
+            res.append(item)
+    return res",0
+h_read_integers,"nums = list(map(int, input().split()))
+print(sum(nums))",0
+h_loop_break,"while True:
+    cmd = input('Enter cmd: ')
+    if cmd == 'exit':
+        break
+    print('Received:', cmd)",0
+ai_circle_area,"import math
+from typing import Union
+
+def calculate_circle_area(radius: Union[int, float]) -> float:
+    """"""Calculate and return the area of a circle given its radius.""""""
+    if radius < 0:
+        raise ValueError('Radius cannot be negative')
+    return math.pi * (radius ** 2)",1
+ai_celsius_converter,"def celsius_to_fahrenheit(celsius: float) -> float:
+    """"""Convert temperature from Celsius to Fahrenheit scale.""""""
+    return (celsius * 9.0 / 5.0) + 32.0",1
+ai_max_three,"def find_maximum_of_three(a: float, b: float, c: float) -> float:
+    """"""Return the maximum among three numbers using max built-in.""""""
+    return max(a, b, c)",1
+ai_count_vowels,"def count_vowels(input_string: str) -> int:
+    """"""Count the total number of vowels present in the given string.""""""
+    vowels = set('aeiouAEIOU')
+    return sum(1 for char in input_string if char in vowels)",1
+ai_simple_calculator,"from typing import Union
+
+def perform_arithmetic_operation(operand_a: float, operand_b: float, operator: str) -> float:
+    """"""Execute basic arithmetic operation based on provided operator.""""""
+    operations = {
+        '+': lambda x, y: x + y,
+        '-': lambda x, y: x - y,
+        '*': lambda x, y: x * y,
+        '/': lambda x, y: x / y if y != 0 else float('nan'),
+    }
+    if operator not in operations:
+        raise ValueError(f'Unsupported operator: {operator}')
+    return operations[operator](operand_a, operand_b)",1
+ai_multiplication_table,"def generate_multiplication_table(number: int, limit: int = 10) -> list[str]:
+    """"""Generate formatted multiplication table lines for a specified integer.""""""
+    return [f'{number} x {i} = {number * i}' for i in range(1, limit + 1)]",1
+ai_even_odd,"def is_even_number(number: int) -> bool:
+    """"""Check whether an integer is even.""""""
+    return number % 2 == 0",1
+ai_linear_search,"from typing import Any, Sequence, Optional
+
+def linear_search(sequence: Sequence[Any], target_item: Any) -> Optional[int]:
+    """"""Search for target item in sequence and return its index if found.""""""
+    for index, current_element in enumerate(sequence):
+        if current_element == target_item:
+            return index
+    return None",1
+ai_reverse_string,"def reverse_string(input_text: str) -> str:
+    """"""Return the reversed representation of the input string.""""""
+    return input_text[::-1]",1
+ai_dict_freq,"from collections import Counter
+from typing import Dict
+
+def calculate_character_frequencies(text: str) -> Dict[str, int]:
+    """"""Compute frequency distribution of characters in a string.""""""
+    return dict(Counter(text))",1
+ai_oop_vehicle,"class Vehicle:
+    """"""Represents a general vehicle with brand and production year.""""""
+    def __init__(self, brand: str, manufacturing_year: int) -> None:
+        self.brand = brand
+        self.manufacturing_year = manufacturing_year
+
+    def drive(self) -> None:
+        print(f'{self.brand} is currently driving.')",1
+ai_sum_digits,"def sum_of_digits(number: int) -> int:
+    """"""Calculate the sum of all digits of an integer.""""""
+    return sum(int(digit) for digit in str(abs(number)))",1
+ai_remove_duplicates,"from typing import List, TypeVar
+
+T = TypeVar('T')
+def remove_duplicates_preserving_order(elements: List[T]) -> List[T]:
+    """"""Remove duplicate elements while maintaining their original order.""""""
+    return list(dict.fromkeys(elements))",1
+ai_most_frequent,"from collections import Counter
+from typing import Any, List, Optional
+
+def get_most_frequent_element(items: List[Any]) -> Optional[Any]:
+    """"""Find and return the most commonly occurring element in the list.""""""
+    if not items:
+        return None
+    return Counter(items).most_common(1)[0][0]",1

@@ -673,6 +673,12 @@ def get_class_assignments(class_id):
     if not cls:
         return jsonify({"error": "Class not found"}), 404
     
+    total_students = (
+        len(cls['student_emails'])
+        if isinstance(cls.get('student_emails'), list)
+        else cls.get('student_count', 0)
+    )
+
     assignments_collection = db['assignments']
     assignments = list(assignments_collection.find({'course': class_id}))
 
@@ -681,11 +687,6 @@ def get_class_assignments(class_id):
         assignment['_id'] = str(assignment['_id'])
         assignment['id'] = assignment['_id']
         assignment['createdAt'] = assignment.get('created_at')
-        total_students = (
-            len(cls['student_emails'])
-            if isinstance(cls.get('student_emails'), list)
-            else cls.get('student_count', 0)
-        )
         submitted_students = db['submissions'].count_documents({
             'assignment_id': assignment['id'],
         })
