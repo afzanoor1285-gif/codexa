@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft,
   Plus,
@@ -12,11 +13,13 @@ import {
   Bell,
   FileText,
   Loader,
+  UserPlus,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 
 interface Assignment {
   id: string;
+  assignment_number: number;
   title: string;
   description: string;
   deadline: string;
@@ -32,6 +35,24 @@ interface ClassData {
   code: string;
   section: string;
   studentCount: number;
+  degree: string;
+  semester: number;
+  studentEmails: string[];
+  invitedEmails: string[];
+}
+
+interface Student {
+  name: string;
+  email: string;
+  degree?: string | null;
+  semester?: number | null;
+}
+
+interface StudentRosterUpdate {
+  class_student_count?: number;
+  student_emails?: string[];
+  invited_emails?: string[];
+  message?: string;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:5000";
@@ -46,6 +67,15 @@ const ClassDetail = () => {
   const [error, setError] = useState<string | null>(null);
   const [assignmentSort, setAssignmentSort] = useState<"newest" | "oldest" | "deadline">("newest");
   const [deadlineDisplay, setDeadlineDisplay] = useState<"date_time" | "date_only" | "relative">("date_time");
+  const [manageStudentsOpen, setManageStudentsOpen] = useState(false);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudentEmails, setSelectedStudentEmails] = useState<string[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
+  const [studentsMessage, setStudentsMessage] = useState<string | null>(null);
+  const [addStudentsLoading, setAddStudentsLoading] = useState(false);
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentEmail, setNewStudentEmail] = useState("");
 
   const fetchClassData = useCallback(async () => {
     try {
@@ -64,14 +94,8 @@ const ClassDetail = () => {
       );
 
       if (!response.ok) {
-        let errorMsg = "Failed to fetch class data";
-        try {
-          const errData = await response.json();
-          errorMsg = errData.error || errorMsg;
-        } catch {
-          errorMsg = `Server error (${response.status}): ${response.statusText}`;
-        }
-        throw new Error(errorMsg);
+        const data = await response.json();
+        throw new Error(data.error || "Failed to fetch class data");
       }
 
       const data = await response.json();
@@ -123,6 +147,142 @@ const ClassDetail = () => {
   const handleCreateAssignment = () => {
     navigate(`/teacher/create-assignment/${classId}`);
   };
+
+  const openStudentManager = useCallback(async () => {
+    setManageStudentsOpen(true);
+    setStudentsError(null);
+    setStudentsMessage(null);
+    setStudentsLoading(true);
+    try {
+      const token = localStorage.getItem("codexa_token");
+      const response = await fetch(`${API_BASE_URL}/api/students`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load students.");
+      setStudents(data.students || []);
+    } catch (studentError) {
+      setStudentsError(studentError instanceof Error ? studentError.message : "Unable to load students.");
+    } finally {
+      setStudentsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (location.state?.openStudentManager) {
+      void openStudentManager();
+    }
+  }, [location.state?.openStudentManager, openStudentManager]);
+
+  const toggleStudentSelection = (email: string) => {
+    setSelectedStudentEmails((current) =>
+      current.includes(email)
+        ? current.filter((selectedEmail) => selectedEmail !== email)
+        : [...current, email],
+    );
+  };
+
+  const applyStudentRosterUpdate = (data: StudentRosterUpdate) => {
+    const allEmails = [
+      ...(data.student_emails || []),
+      ...(data.invited_emails || []),
+    ];
+    const classStudentCount = data.class_student_count
+      ?? new Set(allEmails.map((email) => email.trim().toLowerCase())).size;
+    setClassData((current) => current
+      ? {
+          ...current,
+          studentEmails: data.student_emails || current.studentEmails,
+          invitedEmails: data.invited_emails || current.invitedEmails,
+          studentCount: classStudentCount,
+        }
+      : current);
+    setAssignments((current) => current.map((assignment) => ({
+      ...assignment,
+      total_students: classStudentCount,
+      pending_students: Math.max(
+        classStudentCount - assignment.submitted_students,
+        0,
+      ),
+    })));
+  };
+
+  const addStudentsToClass = async () => {
+    if (!classId || selectedStudentEmails.length === 0) return;
+    setAddStudentsLoading(true);
+    setStudentsError(null);
+    setStudentsMessage(null);
+    try {
+      const token = localStorage.getItem("codexa_token");
+      const response = await fetch(`${API_BASE_URL}/api/classes/${classId}/students`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({ student_emails: selectedStudentEmails }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to add students.");
+      applyStudentRosterUpdate(data);
+      setSelectedStudentEmails([]);
+      setStudentsMessage(data.message || "Students added to class.");
+    } catch (studentError) {
+      setStudentsError(studentError instanceof Error ? studentError.message : "Unable to add students.");
+    } finally {
+      setAddStudentsLoading(false);
+    }
+  };
+
+  const addNewStudentToClass = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!classId) return;
+    setAddStudentsLoading(true);
+    setStudentsError(null);
+    setStudentsMessage(null);
+    try {
+      const token = localStorage.getItem("codexa_token");
+      const response = await fetch(`${API_BASE_URL}/api/classes/${classId}/students`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({
+          student: {
+            name: newStudentName.trim(),
+            email: newStudentEmail.trim(),
+          },
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to add this student.");
+      applyStudentRosterUpdate(data);
+      setNewStudentName("");
+      setNewStudentEmail("");
+      setStudentsMessage(
+        `${data.message || "Student added to class."}. They can access the class after registering with this email and matching program details.`,
+      );
+    } catch (studentError) {
+      setStudentsError(studentError instanceof Error ? studentError.message : "Unable to add this student.");
+    } finally {
+      setAddStudentsLoading(false);
+    }
+  };
+
+  const invitedEmails = new Set(
+    (classData?.invitedEmails || []).map((email) => email.toLowerCase()),
+  );
+  const enrolledEmails = new Set(
+    (classData?.studentEmails || []).map((email) => email.toLowerCase()),
+  );
+  const eligibleStudents = students.filter(
+    (student) =>
+      student.degree === classData?.degree
+      && String(student.semester || "") === String(classData?.semester)
+      && !invitedEmails.has(student.email.toLowerCase())
+      && !enrolledEmails.has(student.email.toLowerCase()),
+  );
 
   const handleViewStudents = (assignmentId: string) => {
     navigate(`/teacher/assignment/${assignmentId}/students`);
@@ -193,19 +353,111 @@ const ClassDetail = () => {
               <p className="text-sm text-muted-foreground">{classData?.section}</p>
             </div>
           </div>
-          <Button
-            onClick={handleCreateAssignment}
-            className="flex shrink-0 items-center gap-2 px-3 sm:px-4"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Create Assignment</span>
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void openStudentManager()}
+              className="flex items-center gap-2 px-3 sm:px-4"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Students</span>
+            </Button>
+            <Button
+              onClick={handleCreateAssignment}
+              className="flex items-center gap-2 px-3 sm:px-4"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Create Assignment</span>
+            </Button>
+          </div>
         </header>
 
         <div className="p-4 sm:p-6">
+          {manageStudentsOpen && (
+            <section className="mb-6 rounded-2xl border border-border bg-card p-4 sm:p-6" aria-labelledby="manage-students-title">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 id="manage-students-title" className="font-semibold text-foreground">Add students to this class</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Add a matching registered student, or enter a new student's name and email. Students appear in the class roster right away; new students need a Codexa account with matching program details to access assignments.
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" onClick={() => setManageStudentsOpen(false)}>
+                  Close
+                </Button>
+              </div>
+              {studentsError && <p className="mb-3 text-sm text-destructive" role="alert">{studentsError}</p>}
+              {studentsMessage && <p className="mb-3 text-sm text-accent" role="status">{studentsMessage}</p>}
+              {studentsLoading ? (
+                <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                  <Loader className="h-4 w-4 animate-spin" /> Loading students...
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {eligibleStudents.length === 0 ? (
+                    <p className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
+                      No registered students match this class yet. Add one by name and email below.
+                    </p>
+                  ) : (
+                    <div>
+                      <div className="max-h-60 space-y-2 overflow-y-auto rounded-lg border border-border p-3">
+                        {eligibleStudents.map((student) => (
+                          <label key={student.email} className="flex cursor-pointer flex-wrap items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-muted/50">
+                            <input
+                              type="checkbox"
+                              checked={selectedStudentEmails.includes(student.email)}
+                              onChange={() => toggleStudentSelection(student.email)}
+                              className="h-4 w-4 rounded border-border accent-primary"
+                            />
+                            <span className="font-medium text-foreground">{student.name}</span>
+                            <span className="break-all text-muted-foreground">{student.email}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <Button
+                        type="button"
+                        className="mt-4"
+                        onClick={() => void addStudentsToClass()}
+                        disabled={addStudentsLoading || selectedStudentEmails.length === 0}
+                      >
+                        {addStudentsLoading ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                        Add {selectedStudentEmails.length || ""} selected students
+                      </Button>
+                    </div>
+                  )}
+                  <form onSubmit={addNewStudentToClass} className="space-y-3 rounded-lg border border-border p-4">
+                    <h3 className="font-medium text-foreground">Add a student by email</h3>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        aria-label="Student name"
+                        autoComplete="name"
+                        placeholder="Student name"
+                        value={newStudentName}
+                        onChange={(event) => setNewStudentName(event.target.value)}
+                        required
+                      />
+                      <Input
+                        aria-label="Student email"
+                        autoComplete="email"
+                        type="email"
+                        placeholder="student@example.com"
+                        value={newStudentEmail}
+                        onChange={(event) => setNewStudentEmail(event.target.value)}
+                        required
+                      />
+                    </div>
+                    <Button type="submit" disabled={addStudentsLoading || !classData}>
+                      {addStudentsLoading ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                      Add Student
+                    </Button>
+                  </form>
+                </div>
+              )}
+            </section>
+          )}
           {location.state?.assignmentCreated && (
             <div className="bg-accent/10 text-accent rounded-lg p-4 mb-6" role="status">
-              Assignment created successfully.
+              Assignment {location.state.assignmentNumber} created successfully.
             </div>
           )}
           {loading ? (
@@ -243,7 +495,7 @@ const ClassDetail = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-foreground mb-1">
-                        {assignment.title}
+                        Assignment {assignment.assignment_number}: {assignment.title}
                       </h3>
                       <p className="text-sm text-muted-foreground">
                         {assignment.description}

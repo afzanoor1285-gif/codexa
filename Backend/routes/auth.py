@@ -34,7 +34,7 @@ EMAIL_PATTERN = re.compile(r'[^\s@]+@[^\s@]+\.[^\s@]+')
 MAX_PROFILE_PICTURE_BYTES = 2 * 1024 * 1024
 DEFAULT_SETTINGS = {
     'appearance': {
-        'theme': 'system',
+        'theme': 'light',
         'compact_layout': False,
         'reduced_motion': False,
         'font_size': 'default',
@@ -79,17 +79,21 @@ def _create_jwt_token(user):
 
 
 def _format_user(user):
+    semester = user.get('semester')
+    if isinstance(semester, str) and semester.isdigit():
+        semester = int(semester)
+
     return {
         'email': user.get('email'),
         'role': user.get('role'),
         'name': user.get('name'),
         'degree': user.get('degree'),
         'bio': user.get('bio', ''),
-        'theme': user.get('theme', 'system'),
+        'theme': 'dark' if user.get('theme') == 'dark' else 'light',
         'student_id': user.get('student_id'),
         'department': user.get('department') or user.get('degree'),
         'designation': user.get('designation'),
-        'semester': user.get('semester'),
+        'semester': semester,
         'settings': user.get('settings', DEFAULT_SETTINGS),
     }
 
@@ -181,13 +185,13 @@ def update_profile():
 
     name = data.get('name')
     bio = data.get('bio', '')
-    theme = data.get('theme', 'system')
+    theme = data.get('theme', 'light')
     if not isinstance(name, str) or not name.strip() or len(name.strip()) > 80:
         return jsonify({'error': 'Name is required and must be 80 characters or fewer'}), 400
     if not isinstance(bio, str) or len(bio.strip()) > 300:
         return jsonify({'error': 'Bio must be 300 characters or fewer'}), 400
-    if theme not in ('light', 'dark', 'system'):
-        return jsonify({'error': 'Theme must be light, dark, or system'}), 400
+    if theme not in ('light', 'dark'):
+        return jsonify({'error': 'Theme must be light or dark'}), 400
 
     update_fields = {'name': name.strip(), 'bio': bio.strip(), 'theme': theme}
     if request.user_role == 'teacher':
@@ -200,6 +204,24 @@ def update_profile():
             return jsonify({'error': 'Department and designation must be 100 characters or fewer'}), 400
         update_fields['department'] = department.strip()
         update_fields['designation'] = designation.strip()
+    elif 'degree' in data or 'semester' in data:
+        degree = data.get('degree', request.current_user.get('degree'))
+        semester = data.get('semester', request.current_user.get('semester'))
+        if not isinstance(degree, str) or degree not in STUDENT_DEGREES:
+            return jsonify({'error': 'Please select a valid degree / department'}), 400
+        if type(semester) is not int or semester not in range(1, 9):
+            return jsonify({'error': 'Select a semester from 1 to 8'}), 400
+        current_semester = request.current_user.get('semester')
+        if isinstance(current_semester, str) and current_semester.isdigit():
+            current_semester = int(current_semester)
+        if isinstance(current_semester, int) and (
+            semester != current_semester or degree != request.current_user.get('degree')
+        ):
+            return jsonify({
+                'error': 'Your degree and semester are already set and cannot be changed. Contact your teacher if they need correction.'
+            }), 409
+        update_fields['degree'] = degree
+        update_fields['semester'] = semester
     result = user_model.collection.update_one(
         {'_id': request.current_user['_id']},
         {'$set': update_fields},
@@ -207,8 +229,35 @@ def update_profile():
     if result.matched_count != 1:
         return jsonify({'error': 'Unable to update profile'}), 500
 
-    updated_user = user_model.find_by_email(request.current_user['email'])
-    return jsonify({'message': 'Profile updated', 'user': _format_user(updated_user)}), 200
+    updated_user = user_model.collection.find_one(
+        {'_id': request.current_user['_id']},
+        {'profile_picture': 0, 'profile_picture_mime': 0},
+    )
+    if not updated_user:
+        return jsonify({'error': 'Profile was updated but could not be reloaded'}), 500
+
+    formatted_user = _format_user(updated_user)
+    if request.user_role == 'student' and ('degree' in data or 'semester' in data):
+        expected_degree = update_fields.get('degree')
+        expected_semester = update_fields.get('semester')
+        if (
+            formatted_user.get('degree') != expected_degree
+            or formatted_user.get('semester') != expected_semester
+        ):
+            return jsonify({
+                'error': 'Profile update was not persisted. Please try again.',
+                'user': formatted_user,
+            }), 500
+        return jsonify({
+            'message': 'Profile updated',
+            'user': formatted_user,
+            'cohort': {
+                'degree': formatted_user['degree'],
+                'semester': formatted_user['semester'],
+            },
+        }), 200
+
+    return jsonify({'message': 'Profile updated', 'user': formatted_user}), 200
 
 
 @auth_bp.route('/api/settings', methods=['GET'])
@@ -222,6 +271,9 @@ def get_settings():
     merged_settings['appearance']['theme'] = request.current_user.get(
         'theme',
         merged_settings['appearance']['theme'],
+    )
+    merged_settings['appearance']['theme'] = (
+        'dark' if merged_settings['appearance']['theme'] == 'dark' else 'light'
     )
     if request.user_role != 'teacher':
         merged_settings.pop('assignment', None)
@@ -305,7 +357,7 @@ def save_settings():
 
     appearance = updated['appearance']
     if (
-        appearance['theme'] not in ('light', 'dark', 'system')
+        appearance['theme'] not in ('light', 'dark')
         or not isinstance(appearance['compact_layout'], bool)
         or not isinstance(appearance['reduced_motion'], bool)
         or appearance['font_size'] not in ('small', 'default', 'large')
@@ -430,6 +482,7 @@ def signup():
     role = data.get('role', 'student')
     name = data.get('name')
     degree = data.get('degree')
+    semester = data.get('semester')
 
     if not isinstance(email, str) or not email.strip():
         return jsonify({'error': 'Email is required'}), 400
@@ -450,16 +503,23 @@ def signup():
     if role == 'student':
         if not isinstance(name, str) or not name.strip():
             return jsonify({'error': 'Full name is required'}), 400
-        if degree is not None and (
-            not isinstance(degree, str) or degree not in STUDENT_DEGREES
-        ):
+        if not isinstance(degree, str) or degree not in STUDENT_DEGREES:
             return jsonify({'error': 'Please select a valid degree / department'}), 400
+        if type(semester) is not int or semester not in range(1, 9):
+            return jsonify({'error': 'Select a semester from 1 to 8'}), 400
         name = name.strip()
 
     if user_model.find_by_email(email):
         return jsonify({'error': 'Email already registered'}), 400
 
-    user_model.create_user(email, password, role, name, degree=degree if role == 'student' else None)
+    user_model.create_user(
+        email,
+        password,
+        role,
+        name,
+        degree=degree if role == 'student' else None,
+        semester=semester if role == 'student' else None,
+    )
     user = user_model.find_by_email(email)
     token = _create_jwt_token(user)
 

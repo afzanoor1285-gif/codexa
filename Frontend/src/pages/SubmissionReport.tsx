@@ -236,7 +236,7 @@ const SubmissionReport = () => {
               </section>
 
               <section className="rounded-2xl border border-border bg-card p-4 sm:p-6">
-                <h2 className="text-lg font-semibold text-foreground">AI vs. human writing estimate</h2>
+                <h2 className="text-lg font-semibold text-foreground">AI-vs-human model output</h2>
                 {submission.aiPercentage !== null && submission.humanPercentage !== null ? (
                   <>
                     <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -245,17 +245,17 @@ const SubmissionReport = () => {
                         <p className="mt-1 text-2xl font-bold text-foreground">{submission.aiLabel}</p>
                       </div>
                       <div className="rounded-xl bg-yellow-500/10 p-4">
-                        <p className="text-sm text-muted-foreground">AI writing estimate</p>
+                        <p className="text-sm text-muted-foreground">AI model score</p>
                         <p className="mt-1 text-2xl font-bold text-foreground">{submission.aiPercentage.toFixed(2)}%</p>
                       </div>
                       <div className="rounded-xl bg-accent/10 p-4">
-                        <p className="text-sm text-muted-foreground">Human writing estimate</p>
+                        <p className="text-sm text-muted-foreground">Human model score</p>
                         <p className="mt-1 text-2xl font-bold text-foreground">{submission.humanPercentage.toFixed(2)}%</p>
                       </div>
                     </div>
                     {showConfidence && (
                       <p className="mt-4 text-sm text-muted-foreground">
-                        Model confidence in its predicted label: {submission.aiConfidence !== null
+                        Uncalibrated score for the selected label: {submission.aiConfidence !== null
                           ? `${(submission.aiConfidence * 100).toFixed(2)}%`
                           : "unavailable"}.
                       </p>
@@ -267,7 +267,7 @@ const SubmissionReport = () => {
                   </p>
                 )}
                 <p className="mt-3 text-sm text-muted-foreground">
-                  This is an automated authorship estimate, not a plagiarism or source-matching report. It can be wrong and should not be used as the sole basis for an academic decision.
+                  These scores come from an SVM decision margin; they are not calibrated probabilities or proof of authorship. This is not a plagiarism or source-matching report, can be wrong, and should not be the sole basis for an academic decision.
                 </p>
               </section>
 

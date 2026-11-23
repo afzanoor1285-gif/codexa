@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,8 @@ const CreateAssignment = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [assignmentNumber, setAssignmentNumber] = useState<number | null>(null);
+  const [numberLoading, setNumberLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState({
@@ -28,6 +30,45 @@ const CreateAssignment = () => {
     description: "",
     dueDate: "",
   });
+
+  useEffect(() => {
+    let active = true;
+    const loadNextAssignmentNumber = async () => {
+      if (!classId) {
+        setError("Class not found.");
+        setNumberLoading(false);
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("codexa_token");
+        const response = await fetch(
+          `${API_BASE_URL}/assignments/classes/${encodeURIComponent(classId)}/next-number`,
+          { headers: { Authorization: `Bearer ${token ?? ""}` } },
+        );
+        const data: { assignment_number?: unknown; error?: string } = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to determine the next assignment number.");
+        if (
+          typeof data.assignment_number !== "number"
+          || !Number.isInteger(data.assignment_number)
+          || data.assignment_number < 1
+        ) {
+          throw new Error("The server returned an invalid assignment number.");
+        }
+        if (active) setAssignmentNumber(data.assignment_number);
+      } catch (loadError) {
+        if (active) {
+          setError(loadError instanceof Error ? loadError.message : "Unable to determine the next assignment number.");
+        }
+      } finally {
+        if (active) setNumberLoading(false);
+      }
+    };
+    void loadNextAssignmentNumber();
+    return () => {
+      active = false;
+    };
+  }, [classId]);
 
   const validate = () => {
     const newErrors = { title: "", description: "", dueDate: "" };
@@ -90,8 +131,16 @@ const CreateAssignment = () => {
         throw new Error(data.error || "Failed to create assignment");
       }
 
+      const data: { assignment_number?: unknown; error?: string } = await response.json();
+      if (
+        typeof data.assignment_number !== "number"
+        || !Number.isInteger(data.assignment_number)
+        || data.assignment_number < 1
+      ) {
+        throw new Error("The assignment was created, but the server did not confirm its number.");
+      }
       navigate(`/teacher/class/${classId}`, {
-        state: { assignmentCreated: true },
+        state: { assignmentCreated: true, assignmentNumber: data.assignment_number },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -135,7 +184,11 @@ const CreateAssignment = () => {
               Create Assignment
             </h1>
             <p className="text-sm text-muted-foreground">
-              Add a new assignment to your class
+              {numberLoading
+                ? "Checking the next assignment number..."
+                : assignmentNumber
+                  ? `This will be Assignment ${assignmentNumber} for this class.`
+                  : "Assignment numbering is unavailable until the class is verified."}
             </p>
           </div>
         </header>
@@ -150,6 +203,11 @@ const CreateAssignment = () => {
                     <p className="font-medium">Error</p>
                     <p className="text-sm">{error}</p>
                   </div>
+                </div>
+              )}
+              {assignmentNumber !== null && !numberLoading && (
+                <div className="rounded-xl border border-secondary/20 bg-secondary/5 p-4 text-sm text-foreground">
+                  The system will save this as <strong>Assignment {assignmentNumber}</strong> in this course.
                 </div>
               )}
 
@@ -221,7 +279,7 @@ const CreateAssignment = () => {
               <div className="flex flex-col-reverse gap-3 sm:flex-row">
                 <Button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || numberLoading || assignmentNumber === null}
                   className="flex-1"
                 >
                   {loading ? (
