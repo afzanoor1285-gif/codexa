@@ -14,6 +14,7 @@ import {
   FileText,
   Loader,
   UserPlus,
+  AlertTriangle,
 } from "lucide-react";
 import TeacherLayout from "@/components/TeacherLayout";
 
@@ -93,18 +94,19 @@ const ClassDetail = () => {
         }
       );
 
-      if (!response.ok) {
-        let errorMsg = "Failed to fetch class data";
-        try {
-          const errData = await response.json();
-          errorMsg = errData.error || errorMsg;
-        } catch {
-          errorMsg = `Server error (${response.status}): ${response.statusText}`;
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status} (${response.statusText || "Class not found"})`);
         }
-        throw new Error(errorMsg);
+        throw new Error("Invalid response format from server.");
       }
 
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `Server error (${response.status})`);
+      }
 
       if (data.class && data.assignments) {
         setClassData(data.class);
@@ -445,9 +447,25 @@ const ClassDetail = () => {
             <div className="flex items-center justify-center py-12">
               <Loader className="w-8 h-8 text-muted-foreground animate-spin" />
             </div>
-          ) : error ? (
-            <div className="bg-destructive/10 text-destructive rounded-lg p-4 mb-6">
-              {error}
+          ) : error || !classData ? (
+            <div className="bg-card rounded-xl border border-border p-8 text-center max-w-lg mx-auto my-8 space-y-4">
+              <div className="w-12 h-12 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-foreground">Class Could Not Be Loaded</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {error || "The requested class was not found or you don't have permission to view it."}
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <Button variant="outline" size="sm" onClick={() => navigate("/teacher/classes")} className="text-xs">
+                  <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> Back to Classes
+                </Button>
+                <Button size="sm" onClick={() => fetchClassData()} className="text-xs">
+                  Retry
+                </Button>
+              </div>
             </div>
           ) : assignments.length === 0 ? (
             <div className="text-center py-12">

@@ -418,17 +418,17 @@ def get_submission_report(submission_id):
     if not assignment:
         return jsonify({"error": "Submission not found"}), 404
 
-    ai_report = {
-        'aiLabel': submission.get('aiLabel'),
-        'aiConfidence': submission.get('aiConfidence'),
-        'aiPercentage': submission.get('aiPercentage'),
-        'humanPercentage': submission.get('humanPercentage'),
-    }
-    if ai_report['aiPercentage'] is None or ai_report['humanPercentage'] is None:
-        try:
-            ai_report = analyze_code(submission.get('code', ''))
-        except Exception as e:
-            app.logger.warning("AI report unavailable for submission %s: %s", submission_id, e)
+    try:
+        ai_report = analyze_code(submission.get('code', ''))
+    except Exception as e:
+        app.logger.warning("AI report unavailable for submission %s: %s", submission_id, e)
+        ai_report = {
+            'aiLabel': submission.get('aiLabel'),
+            'aiConfidence': submission.get('aiConfidence'),
+            'aiPercentage': submission.get('aiPercentage'),
+            'humanPercentage': submission.get('humanPercentage'),
+            'signals': [],
+        }
 
     created_at = submission.get('createdAt')
     if hasattr(created_at, 'isoformat'):
@@ -613,7 +613,10 @@ def get_classes():
     
     # Get classes collection or create mock data
     classes_collection = db['classes']
-    classes = list(classes_collection.find({'teacher_id': user_id}))
+    teacher_ids = [user_id, str(user_id)]
+    if ObjectId.is_valid(str(user_id)):
+        teacher_ids.append(ObjectId(user_id))
+    classes = list(classes_collection.find({'teacher_id': {'$in': teacher_ids}}))
     
     # Convert ObjectId to string for JSON serialization
     for cls in classes:
@@ -1051,9 +1054,13 @@ def get_class_assignments(class_id):
     if class_id.isdigit():
         class_ids.append(int(class_id))
 
+    teacher_ids = [request.user_id, str(request.user_id)]
+    if ObjectId.is_valid(str(request.user_id)):
+        teacher_ids.append(ObjectId(request.user_id))
+
     cls = classes_collection.find_one({
         '_id': {'$in': class_ids},
-        'teacher_id': request.user_id,
+        'teacher_id': {'$in': teacher_ids},
     })
     
     if not cls:

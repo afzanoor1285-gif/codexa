@@ -611,9 +611,13 @@ const TeacherDashboard = () => {
                               {sub.score !== null && sub.score !== undefined ? `${sub.score}/100` : "—"}
                             </span>
                             <Link to={`/teacher/submission/${subId}`}>
-                              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                              <Button
+                                size="sm"
+                                variant={sub.score === null || sub.score === undefined ? "default" : "outline"}
+                                className="h-8 gap-1.5 text-xs font-semibold shrink-0"
+                              >
                                 <Eye className="w-3.5 h-3.5" />
-                                {sub.score === null || sub.score === undefined ? "Grade" : "Review"}
+                                {sub.score === null || sub.score === undefined ? "Review & Grade" : "Review"}
                               </Button>
                             </Link>
                           </div>
@@ -624,63 +628,124 @@ const TeacherDashboard = () => {
                 </div>
               </div>
 
-              {/* Active Assignments Column */}
-              <div className="bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden flex flex-col">
-                <div className="px-5 py-4 border-b border-border/80 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-semibold text-foreground">Active Assignments</h2>
-                    <p className="text-xs text-muted-foreground">{assignments.length} total assignments</p>
+              {/* Right Column: Classes & Active Assignments */}
+              <div className="space-y-6 flex flex-col">
+                {/* My Classes Quick Card */}
+                <div className="bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden flex flex-col">
+                  <div className="px-5 py-4 border-b border-border/80 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">My Classes</h2>
+                      <p className="text-xs text-muted-foreground">{classes.length} active courses</p>
+                    </div>
+                    <Link to="/teacher/classes">
+                      <Button variant="ghost" size="sm" className="text-xs h-8">
+                        View All
+                      </Button>
+                    </Link>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={handleCreateAssignmentClick} className="h-8 w-8 p-0">
-                    <PlusCircle className="w-4 h-4" />
-                  </Button>
+
+                  <div className="divide-y divide-border/60 p-2 space-y-1.5 overflow-y-auto max-h-[260px]">
+                    {classes.length === 0 ? (
+                      <div className="p-5 text-center text-xs text-muted-foreground">
+                        <GraduationCap className="w-7 h-7 mx-auto text-muted-foreground/40 mb-2" />
+                        <p className="font-semibold text-foreground">No classes yet</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Create your first class to enroll students</p>
+                        <Link to="/teacher/classes">
+                          <Button variant="outline" size="sm" className="mt-2.5 text-xs h-7">
+                            Create Class
+                          </Button>
+                        </Link>
+                      </div>
+                    ) : (
+                      classes.map((cls) => {
+                        const classId = cls.id || cls._id;
+                        return (
+                          <div key={classId} className="p-3 rounded-lg bg-muted/40 border border-border/50 hover:bg-muted/70 transition-colors">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <Link to={`/teacher/class/${classId}`} className="font-semibold text-xs text-foreground hover:underline truncate block">
+                                  {cls.name}
+                                </Link>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  {cls.code} · {cls.studentCount || (cls.student_emails?.length || 0)} enrolled
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/40 text-xs">
+                              <Link to={`/teacher/class/${classId}`} className="text-primary hover:underline font-medium text-[11px]">
+                                Open Class →
+                              </Link>
+                              <Link to={`/teacher/classes/${classId}/assignments/new`}>
+                                <span className="text-muted-foreground hover:text-foreground text-[11px]">
+                                  + Assignment
+                                </span>
+                              </Link>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
 
-                <div className="divide-y divide-border/60 p-2 space-y-2 overflow-y-auto max-h-[500px]">
-                  {assignments.length === 0 ? (
-                    <div className="p-6 text-center text-xs text-muted-foreground">
-                      <FileCode className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-                      <p className="font-semibold text-foreground">No assignments yet</p>
-                      <p className="text-xs text-muted-foreground mt-1">Create assignments to collect student code</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCreateAssignmentClick}
-                        className="mt-3 text-xs h-8"
-                      >
-                        Create Assignment
-                      </Button>
+                {/* Active Assignments Column */}
+                <div className="bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden flex flex-col">
+                  <div className="px-5 py-4 border-b border-border/80 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Active Assignments</h2>
+                      <p className="text-xs text-muted-foreground">{assignments.length} total assignments</p>
                     </div>
-                  ) : (
-                    assignments.map((assignment) => {
-                      const classTitle = classMap.get(assignment.course) || assignment.course_name || "General Course";
-                      const aSubmissions = submissions.filter(
-                        (s) => s.assignment_id === assignment.id || s.assignment_title === assignment.title
-                      );
+                    <Button variant="ghost" size="sm" onClick={handleCreateAssignmentClick} className="h-8 w-8 p-0">
+                      <PlusCircle className="w-4 h-4" />
+                    </Button>
+                  </div>
 
-                      return (
-                        <div key={assignment.id} className="p-3 rounded-lg bg-muted/40 border border-border/50">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="font-semibold text-xs sm:text-sm text-foreground">{assignment.title || assignment.name}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">{classTitle}</p>
+                  <div className="divide-y divide-border/60 p-2 space-y-2 overflow-y-auto max-h-[300px]">
+                    {assignments.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-muted-foreground">
+                        <FileCode className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                        <p className="font-semibold text-foreground">No assignments yet</p>
+                        <p className="text-xs text-muted-foreground mt-1">Create assignments to collect student code</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCreateAssignmentClick}
+                          className="mt-3 text-xs h-8"
+                        >
+                          Create Assignment
+                        </Button>
+                      </div>
+                    ) : (
+                      assignments.map((assignment) => {
+                        const classTitle = classMap.get(assignment.course) || assignment.course_name || "General Course";
+                        const aSubmissions = submissions.filter(
+                          (s) => s.assignment_id === assignment.id || s.assignment_title === assignment.title
+                        );
+
+                        return (
+                          <div key={assignment.id} className="p-3 rounded-lg bg-muted/40 border border-border/50">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-semibold text-xs text-foreground">{assignment.title || assignment.name}</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">{classTitle}</p>
+                              </div>
+                              <span className="text-[11px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-semibold shrink-0">
+                                #{assignment.assignment_number || 1}
+                              </span>
                             </div>
-                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-semibold shrink-0">
-                              #{assignment.assignment_number || 1}
-                            </span>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground mt-3 pt-2 border-t border-border/40">
+                              <span>{aSubmissions.length} submissions</span>
+                              <span>
+                                {assignment.deadline
+                                  ? `Due: ${new Date(assignment.deadline).toLocaleDateString()}`
+                                  : "No due date"}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground mt-3 pt-2 border-t border-border/40">
-                            <span>{aSubmissions.length} submissions</span>
-                            <span>
-                              {assignment.deadline
-                                ? `Due: ${new Date(assignment.deadline).toLocaleDateString()}`
-                                : "No due date"}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
