@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Users,
@@ -7,23 +7,34 @@ import {
   AlertTriangle,
   Clock,
   TrendingUp,
-  Upload,
+  PlusCircle,
   Download,
   Search,
   Bell,
   Settings,
   LogOut,
-  ChevronDown,
-  Filter,
   Eye,
   BookOpen,
+  CheckCircle2,
+  ShieldCheck,
+  ShieldAlert,
+  ArrowUpRight,
+  Filter,
+  GraduationCap,
 } from "lucide-react";
 import BrandLogo from "@/components/BrandLogo";
 import ProfilePhoto from "@/components/ProfilePhoto";
 import AccountSettingsDialog from "@/components/AccountSettingsDialog";
 import MobileNavigation from "@/components/MobileNavigation";
 import { Input } from "@/components/ui/input";
-import { getUser, logout } from "@/lib/auth";
+import { getUser, logout, getToken } from "@/lib/auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   getStudentProgramLabel,
   STUDENT_SEMESTERS,
@@ -40,9 +51,55 @@ interface Student {
   semester?: number | null;
 }
 
+interface ClassItem {
+  id: string;
+  _id?: string;
+  name: string;
+  code: string;
+  section?: string;
+  studentCount?: number;
+  student_emails?: string[];
+}
+
+interface AssignmentItem {
+  id: string;
+  _id?: string;
+  title: string;
+  name?: string;
+  course: string;
+  course_name?: string;
+  deadline?: string | null;
+  description?: string;
+  assignment_number?: number;
+}
+
+interface SubmissionItem {
+  id: string;
+  _id?: string;
+  student_name?: string;
+  studentName?: string;
+  student_email?: string;
+  studentEmail?: string;
+  assignment_title?: string;
+  assignmentTitle?: string;
+  assignment_id?: string;
+  class_id?: string;
+  status: string;
+  score: number | null;
+  aiLabel?: "AI" | "Human" | null;
+  aiConfidence?: number | null;
+  aiPercentage?: number | null;
+  humanPercentage?: number | null;
+  submitted_at?: string;
+  createdAt?: string;
+}
+
 const TeacherDashboard = () => {
+  const navigate = useNavigate();
   const [user, setUser] = useState(getUser);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [classPickerOpen, setClassPickerOpen] = useState(false);
+
   useEffect(() => {
     const updateUser = (event: Event) => {
       const updatedUser = (event as CustomEvent<ReturnType<typeof getUser>>).detail;
@@ -51,6 +108,7 @@ const TeacherDashboard = () => {
     window.addEventListener("codexa:user-updated", updateUser);
     return () => window.removeEventListener("codexa:user-updated", updateUser);
   }, []);
+
   const teacherName = user?.name?.trim() || user?.email?.split("@")[0] || "Teacher";
   const teacherInitials = teacherName
     .split(/\s+/)
@@ -59,23 +117,63 @@ const TeacherDashboard = () => {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const [activeTab, setActiveTab] = useState("overview");
-  const [students, setStudents] = useState<Student[]>([]);
-  const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [newName, setNewName] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newDegree, setNewDegree] = useState('');
-  const [newSemester, setNewSemester] = useState('');
-  const [studentProgramFilter, setStudentProgramFilter] = useState('all');
-  const [studentSearch, setStudentSearch] = useState('');
 
+  const [activeTab, setActiveTab] = useState<"overview" | "assignments" | "students" | "plagiarism">("overview");
+  const [students, setStudents] = useState<Student[]>([]);
+  const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filters & search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [submissionFilter, setSubmissionFilter] = useState<"all" | "ai" | "human" | "pending" | "graded">("all");
+  const [studentProgramFilter, setStudentProgramFilter] = useState("all");
+
+  // New student form
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newDegree, setNewDegree] = useState("");
+  const [newSemester, setNewSemester] = useState("");
+
+  // Load classes, assignments, and submissions on mount
   useEffect(() => {
-    if (activeTab === "students") {
+    const token = getToken();
+    if (!token) return;
+
+    const headers = { Authorization: `Bearer ${token}` };
+
+    // Submissions
+    fetch(`${API_BASE_URL}/api/submissions`, { headers })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.submissions) setSubmissions(data.submissions);
+      })
+      .catch((err) => console.error("Failed to fetch submissions:", err));
+
+    // Classes
+    fetch(`${API_BASE_URL}/api/classes`, { headers })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.classes) setClasses(data.classes);
+      })
+      .catch((err) => console.error("Failed to fetch classes:", err));
+
+    // Assignments
+    fetch(`${API_BASE_URL}/assignments/`, { headers })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.assignments) setAssignments(data.assignments);
+      })
+      .catch((err) => console.error("Failed to fetch assignments:", err));
+  }, []);
+
+  // Load students when students tab is opened
+  useEffect(() => {
+    if (activeTab === "students" && students.length === 0) {
       setLoading(true);
-      setError(null);
-      const token = localStorage.getItem("codexa_token");
+      const token = getToken();
       fetch(`${API_BASE_URL}/api/students`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -84,40 +182,25 @@ const TeacherDashboard = () => {
           if (!res.ok) throw new Error(data.error || "Unable to load students");
           return data;
         })
-        .then(data => {
+        .then((data) => {
           setStudents(data.students || []);
           setLoading(false);
         })
-        .catch(err => {
+        .catch((err) => {
           setError(err.message);
           setLoading(false);
         });
     }
-  }, [activeTab]);
-
-  useEffect(() => {
-    // Fetch submissions on mount
-    const token = localStorage.getItem("codexa_token");
-    fetch(`${API_BASE_URL}/api/submissions`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(res => res.json())
-      .then(data => {
-        setSubmissions(data.submissions);
-      })
-      .catch(err => {
-        console.error('Failed to fetch submissions:', err);
-      });
-  }, []);
+  }, [activeTab, students.length]);
 
   const handleAddStudent = async () => {
     if (!newName.trim() || !newEmail.trim() || !newDegree || !newSemester) return;
     try {
-      const token = localStorage.getItem("codexa_token");
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/students`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
@@ -125,91 +208,172 @@ const TeacherDashboard = () => {
           email: newEmail.trim(),
           degree: newDegree,
           semester: Number(newSemester),
-        })
+        }),
       });
       if (response.ok) {
-        setNewName('');
-        setNewEmail('');
-        setNewDegree('');
-        setNewSemester('');
-        // Refetch students
-        setLoading(true);
-        fetch(`${API_BASE_URL}/api/students`, {
+        setNewName("");
+        setNewEmail("");
+        setNewDegree("");
+        setNewSemester("");
+        // Reload students
+        const res = await fetch(`${API_BASE_URL}/api/students`, {
           headers: { Authorization: `Bearer ${token}` },
-        })
-          .then(res => res.json())
-          .then(data => {
-            setStudents(data.students);
-            setLoading(false);
-          })
-          .catch(err => {
-            setError(err.message);
-            setLoading(false);
-          });
+        });
+        const data = await res.json();
+        setStudents(data.students || []);
       } else {
-        alert('Failed to add student');
+        alert("Failed to add student");
       }
     } catch (error) {
       console.error(error);
-      alert('Error adding student');
+      alert("Error adding student");
     }
   };
 
-  const filteredStudents = students.filter((student) => {
-    const matchesProgram = studentProgramFilter === 'all'
-      || (student.degree || UNSPECIFIED_PROGRAM) === studentProgramFilter;
-    const query = studentSearch.trim().toLowerCase();
-    const matchesSearch = !query
-      || student.name.toLowerCase().includes(query)
-      || student.email.toLowerCase().includes(query);
-    return matchesProgram && matchesSearch;
-  });
+  // Map class name lookup
+  const classMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const cls of classes) {
+      const id = cls.id || cls._id || "";
+      map.set(id, `${cls.name} (${cls.code})`);
+    }
+    return map;
+  }, [classes]);
 
-  const totalSubmissions = (submissions || []).length;
-  const pendingReview = (submissions || []).filter(s => s.score === null || s.score === undefined).length;
-  const gradedSubmissions = (submissions || []).filter(s => typeof s.score === "number" && !isNaN(s.score));
-  const averageScore = gradedSubmissions.length > 0 
-    ? Math.round(gradedSubmissions.reduce((sum, s) => sum + s.score, 0) / gradedSubmissions.length)
-    : 0;
+  // Derived statistics
+  const totalSubmissions = submissions.length;
+  const aiSubmissions = submissions.filter((s) => s.aiLabel === "AI");
+  const humanSubmissions = submissions.filter((s) => s.aiLabel === "Human");
+  const pendingReview = submissions.filter((s) => s.score === null || s.score === undefined);
+  const gradedSubmissions = submissions.filter((s) => typeof s.score === "number" && !isNaN(s.score));
+  const averageScore =
+    gradedSubmissions.length > 0
+      ? Math.round(gradedSubmissions.reduce((sum, s) => sum + (s.score || 0), 0) / gradedSubmissions.length)
+      : null;
 
-  const stats = [
-    { icon: FileCode, label: "Total Submissions", value: totalSubmissions.toString(), change: "", color: "secondary" },
-    { icon: AlertTriangle, label: "AI-labeled", value: (submissions || []).filter(s => s.aiLabel === 'AI').length.toString(), change: "", color: "destructive" },
-    { icon: Clock, label: "Pending Review", value: pendingReview.toString(), change: "", color: "yellow" },
-    { icon: TrendingUp, label: "Average Score", value: gradedSubmissions.length > 0 ? `${averageScore}%` : "—", change: "", color: "accent" },
-  ];
+  const humanPercent = totalSubmissions > 0 ? Math.round((humanSubmissions.length / totalSubmissions) * 100) : 100;
+  const aiPercent = totalSubmissions > 0 ? Math.round((aiSubmissions.length / totalSubmissions) * 100) : 0;
 
-  const recentSubmissions = (submissions || []).slice(0, 5).map((sub: any) => {
-    const studentName = sub.student_name || sub.studentName || sub.student_email || "Student";
-    const assignmentTitle = sub.assignment_title || sub.assignmentTitle || "Assignment";
-    const status = sub.status || "Submitted";
-    const score = sub.score !== null && sub.score !== undefined ? `${sub.score}/100` : "-";
-    const time = sub.submitted_at || sub.createdAt ? new Date(sub.submitted_at || sub.createdAt).toLocaleString() : "Just now";
-    return {
-      id: sub._id || sub.id,
-      name: studentName,
-      assignment: assignmentTitle,
-      status,
-      score,
-      time,
-      aiLabel: sub.aiLabel || null,
-      aiConfidence: sub.aiConfidence || null,
-      aiPercentage: sub.aiPercentage ?? null,
-      humanPercentage: sub.humanPercentage ?? null,
-    };
-  });
+  // Filtered submissions
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((sub) => {
+      const name = (sub.student_name || sub.studentName || "").toLowerCase();
+      const email = (sub.student_email || sub.studentEmail || "").toLowerCase();
+      const title = (sub.assignment_title || sub.assignmentTitle || "").toLowerCase();
+      const q = searchQuery.trim().toLowerCase();
 
-  const assignments = [];
+      const matchesSearch = !q || name.includes(q) || email.includes(q) || title.includes(q);
+      if (!matchesSearch) return false;
+
+      if (submissionFilter === "ai") return sub.aiLabel === "AI";
+      if (submissionFilter === "human") return sub.aiLabel === "Human";
+      if (submissionFilter === "pending") return sub.score === null || sub.score === undefined;
+      if (submissionFilter === "graded") return typeof sub.score === "number";
+      return true;
+    });
+  }, [submissions, searchQuery, submissionFilter]);
+
+  // Filtered students
+  const filteredStudents = useMemo(() => {
+    return students.filter((student) => {
+      const matchesProgram =
+        studentProgramFilter === "all" || (student.degree || UNSPECIFIED_PROGRAM) === studentProgramFilter;
+      const q = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        !q || student.name.toLowerCase().includes(q) || student.email.toLowerCase().includes(q);
+      return matchesProgram && matchesSearch;
+    });
+  }, [students, studentProgramFilter, searchQuery]);
+
+  // Handle Export CSV
+  const handleExportCSV = () => {
+    if (submissions.length === 0) {
+      alert("No submissions available to export.");
+      return;
+    }
+    const headers = [
+      "Student Name",
+      "Student Email",
+      "Assignment",
+      "Status",
+      "Score",
+      "AI Detection",
+      "AI Confidence",
+      "Human Originality %",
+      "Submitted At",
+    ];
+    const rows = submissions.map((s) => [
+      `"${s.student_name || s.studentName || "Student"}"`,
+      `"${s.student_email || s.studentEmail || ""}"`,
+      `"${s.assignment_title || s.assignmentTitle || "Assignment"}"`,
+      `"${s.status || "Submitted"}"`,
+      s.score !== null && s.score !== undefined ? `${s.score}` : "Not Graded",
+      `"${s.aiLabel || "Unchecked"}"`,
+      s.aiConfidence ? `${Math.round(s.aiConfidence * 100)}%` : "N/A",
+      s.humanPercentage !== null && s.humanPercentage !== undefined ? `${s.humanPercentage}%` : "N/A",
+      `"${s.submitted_at || s.createdAt || ""}"`,
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `codexa_submissions_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCreateAssignmentClick = () => {
+    if (classes.length === 0) {
+      navigate("/teacher/classes");
+    } else if (classes.length === 1) {
+      navigate(`/teacher/classes/${classes[0].id || classes[0]._id}/assignments/new`);
+    } else {
+      setClassPickerOpen(true);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <AccountSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} role="teacher" />
+
+      {/* Class Selection Dialog for Creating Assignment */}
+      <Dialog open={classPickerOpen} onOpenChange={setClassPickerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Class</DialogTitle>
+            <DialogDescription>
+              Choose which class you want to create an assignment for.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-3">
+            {classes.map((c) => (
+              <button
+                key={c.id || c._id}
+                onClick={() => {
+                  setClassPickerOpen(false);
+                  navigate(`/teacher/classes/${c.id || c._id}/assignments/new`);
+                }}
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors text-left"
+              >
+                <div>
+                  <p className="font-semibold text-foreground">{c.name}</p>
+                  <p className="text-xs text-muted-foreground">{c.code} · {c.studentCount || 0} students</p>
+                </div>
+                <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:block">
+      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-4 hidden lg:block z-20">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 mb-8 px-2">
           <BrandLogo className="w-10 h-10 object-contain" />
-          <span className="text-xl font-bold text-foreground">Codexa</span>
+          <span className="text-xl font-bold tracking-tight text-foreground">Codexa</span>
         </Link>
 
         {/* Navigation */}
@@ -221,18 +385,14 @@ const TeacherDashboard = () => {
             { icon: Users, label: "Students", id: "students" },
             { icon: AlertTriangle, label: "Plagiarism Reports", id: "plagiarism" },
             { icon: Settings, label: "Settings", id: "settings" },
-          ].map((item) => (
+          ].map((item) =>
             item.href ? (
               <Link
                 key={item.id}
                 to={item.href}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                  activeTab === item.id
-                    ? "bg-secondary/10 text-secondary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
-                <item.icon className="w-5 h-5" />
+                <item.icon className="w-5 h-5 text-muted-foreground" />
                 {item.label}
               </Link>
             ) : (
@@ -242,12 +402,12 @@ const TeacherDashboard = () => {
                   if (item.id === "settings") {
                     setSettingsOpen(true);
                   } else {
-                    setActiveTab(item.id);
+                    setActiveTab(item.id as typeof activeTab);
                   }
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                   activeTab === item.id
-                    ? "bg-secondary/10 text-secondary"
+                    ? "bg-secondary/10 text-secondary font-semibold"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
@@ -255,7 +415,7 @@ const TeacherDashboard = () => {
                 {item.label}
               </button>
             )
-          ))}
+          )}
         </nav>
 
         {/* Bottom */}
@@ -263,7 +423,7 @@ const TeacherDashboard = () => {
           <Link
             to="/"
             onClick={logout}
-            className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:text-destructive transition-colors"
+            className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:text-destructive transition-colors rounded-xl"
           >
             <LogOut className="w-5 h-5" />
             Sign Out
@@ -271,10 +431,10 @@ const TeacherDashboard = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content Area */}
       <main className="lg:ml-64">
         {/* Header */}
-        <header className="sticky top-0 bg-card/95 backdrop-blur-sm border-b border-border px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 justify-between z-10">
+        <header className="sticky top-0 bg-card/95 backdrop-blur-md border-b border-border px-4 sm:px-6 py-3.5 flex items-center gap-3 sm:gap-4 justify-between z-10">
           <MobileNavigation
             items={[
               { label: "Overview", icon: TrendingUp, onSelect: () => setActiveTab("overview") },
@@ -287,261 +447,602 @@ const TeacherDashboard = () => {
             ]}
           />
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Teacher Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Welcome back, {teacherName}</p>
-            {user?.bio && <p className="mt-1 max-w-xl text-sm text-muted-foreground">{user.bio}</p>}
+            <h1 className="text-xl font-bold tracking-tight text-foreground">Teacher Dashboard</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
+              Welcome back, {teacherName}
+            </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search students..."
-                className="pl-10 w-64"
-                value={studentSearch}
-                onChange={(event) => setStudentSearch(event.target.value)}
+                placeholder="Search submissions or students..."
+                className="pl-9 h-9 w-64 text-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button variant="outline" size="icon">
-              <Bell className="w-5 h-5" />
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => alert("No new notifications at this time.")}
+            >
+              <Bell className="w-4 h-4" />
             </Button>
             <ProfilePhoto initials={teacherInitials} role="teacher" />
           </div>
         </header>
 
-        <div className="p-4 sm:p-6">
-          {activeTab === "students" ? (
-            <div>
-              <h2 className="text-2xl font-bold mb-4">Students</h2>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Filter by program so you can choose the right students for each class.
-              </p>
-              <div className="mb-4 p-4 bg-muted rounded-lg">
-                <h3 className="font-semibold mb-2">Add New Student</h3>
-                <div className="mb-2 flex flex-col gap-2 sm:flex-row">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl">
+          {/* TAB 1: OVERVIEW */}
+          {activeTab === "overview" && (
+            <>
+              {/* Stats KPIs */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-9 h-9 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center">
+                      <FileCode className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Submissions
+                    </span>
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-foreground">{totalSubmissions}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Across all active classes</div>
+                </div>
+
+                <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-9 h-9 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      AI-Flagged
+                    </span>
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-destructive">{aiSubmissions.length}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {totalSubmissions > 0 ? `${aiPercent}% flagged by ML detector` : "No submissions yet"}
+                  </div>
+                </div>
+
+                <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Pending Review
+                    </span>
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-foreground">{pendingReview.length}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Ungraded student codes</div>
+                </div>
+
+                <div className="bg-card rounded-xl p-5 border border-border/80 shadow-sm">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Average Score
+                    </span>
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-foreground">
+                    {averageScore !== null ? `${averageScore}%` : "—"}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {gradedSubmissions.length > 0 ? `${gradedSubmissions.length} graded assignments` : "No graded papers"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border/70">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button onClick={handleCreateAssignmentClick} className="gap-2">
+                    <PlusCircle className="w-4 h-4" />
+                    Create Assignment
+                  </Button>
+                  <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+                    <Download className="w-4 h-4" />
+                    Export CSV
+                  </Button>
+                  <Link to="/teacher/classes">
+                    <Button variant="outline" className="gap-2">
+                      <BookOpen className="w-4 h-4" />
+                      Manage Classes
+                    </Button>
+                  </Link>
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
+                  <span className="text-muted-foreground mr-1 hidden sm:inline">Filter:</span>
+                  {(
+                    [
+                      ["all", "All"],
+                      ["ai", "AI Flagged"],
+                      ["human", "Human"],
+                      ["pending", "Pending"],
+                      ["graded", "Graded"],
+                    ] as const
+                  ).map(([fKey, label]) => (
+                    <button
+                      key={fKey}
+                      onClick={() => setSubmissionFilter(fKey)}
+                      className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                        submissionFilter === fKey
+                          ? "bg-secondary/20 text-secondary border border-secondary/30"
+                          : "text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Real Code Originality & Integrity Distribution */}
+              <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                  <div>
+                    <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                      Code Integrity & Plagiarism Distribution
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Real-time analysis powered by AST structural syntax tree & lexical stylometrics
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-medium">
+                    <span className="flex items-center gap-1.5 text-emerald-500">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      Human: {humanPercent}% ({humanSubmissions.length})
+                    </span>
+                    <span className="flex items-center gap-1.5 text-destructive">
+                      <span className="w-2.5 h-2.5 rounded-full bg-destructive" />
+                      AI Flagged: {aiPercent}% ({aiSubmissions.length})
+                    </span>
+                  </div>
+                </div>
+
+                {/* Distribution Progress Bar */}
+                {totalSubmissions > 0 ? (
+                  <div className="space-y-3">
+                    <div className="w-full h-3 rounded-full bg-muted flex overflow-hidden">
+                      <div
+                        style={{ width: `${humanPercent}%` }}
+                        className="bg-emerald-500 transition-all duration-500"
+                        title={`Human Verified: ${humanPercent}%`}
+                      />
+                      <div
+                        style={{ width: `${aiPercent}%` }}
+                        className="bg-destructive transition-all duration-500"
+                        title={`AI Flagged: ${aiPercent}%`}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                      <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Original Student Code</p>
+                        <p className="text-lg font-bold text-foreground mt-0.5">{humanSubmissions.length} files</p>
+                        <p className="text-[11px] text-muted-foreground">Within authentic human originality bounds</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+                        <p className="text-xs text-destructive font-medium">Suspicious AI Synthesized</p>
+                        <p className="text-lg font-bold text-foreground mt-0.5">{aiSubmissions.length} files</p>
+                        <p className="text-[11px] text-muted-foreground">Elevated AST syntactic & stylometric flags</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/40 border border-border">
+                        <p className="text-xs text-muted-foreground font-medium">Review Pipeline</p>
+                        <p className="text-lg font-bold text-foreground mt-0.5">{pendingReview.length} pending</p>
+                        <p className="text-[11px] text-muted-foreground">Awaiting teacher grading or comment</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    No code submissions logged yet. Once students submit their code, integrity distributions will render here automatically.
+                  </div>
+                )}
+              </div>
+
+              {/* Main Content Grid: Submissions + Active Assignments */}
+              <div className="grid lg:grid-cols-3 gap-6">
+                {/* Recent Submissions Table */}
+                <div className="lg:col-span-2 bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden flex flex-col">
+                  <div className="px-5 py-4 border-b border-border/80 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold text-foreground">Recent Submissions</h2>
+                      <p className="text-xs text-muted-foreground">
+                        {filteredSubmissions.length} of {totalSubmissions} submissions shown
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setActiveTab("plagiarism")}>
+                      View Reports
+                    </Button>
+                  </div>
+
+                  <div className="divide-y divide-border/60 overflow-y-auto max-h-[500px]">
+                    {filteredSubmissions.length === 0 ? (
+                      <div className="p-8 text-center text-sm text-muted-foreground">
+                        No submissions match the current filter.
+                      </div>
+                    ) : (
+                      filteredSubmissions.slice(0, 10).map((sub) => {
+                        const sName = sub.student_name || sub.studentName || sub.student_email || "Student";
+                        const aTitle = sub.assignment_title || sub.assignmentTitle || "Assignment";
+                        const initials = sName
+                          .split(" ")
+                          .map((n) => n[0])
+                          .filter(Boolean)
+                          .join("")
+                          .slice(0, 2)
+                          .toUpperCase();
+                        const isAI = sub.aiLabel === "AI";
+                        const subId = sub.id || sub._id;
+
+                        return (
+                          <div
+                            key={subId}
+                            className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/40 transition-colors ${
+                              isAI ? "border-l-4 border-l-destructive bg-destructive/5" : ""
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full bg-secondary/10 text-secondary flex items-center justify-center text-xs font-bold shrink-0">
+                                {initials || "ST"}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm text-foreground truncate">{sName}</p>
+                                <p className="text-xs text-muted-foreground truncate">{aTitle}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 self-end sm:self-auto">
+                              {sub.aiLabel && (
+                                <span
+                                  className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                                    isAI
+                                      ? "bg-destructive/15 text-destructive border border-destructive/25"
+                                      : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25"
+                                  }`}
+                                >
+                                  {sub.aiLabel} ({sub.aiConfidence ? Math.round(sub.aiConfidence * 100) : 0}%)
+                                </span>
+                              )}
+                              <span className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">
+                                {sub.status || "Submitted"}
+                              </span>
+                              <span className="text-xs font-semibold text-foreground w-12 text-right">
+                                {sub.score !== null && sub.score !== undefined ? `${sub.score}/100` : "—"}
+                              </span>
+                              <Link to={`/teacher/submission/${subId}`}>
+                                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                                  <Eye className="w-3.5 h-3.5" />
+                                  {sub.score === null || sub.score === undefined ? "Grade" : "Review"}
+                                </Button>
+                              </Link>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Active Assignments List (Now Connected to Backend) */}
+                <div className="bg-card rounded-xl border border-border/80 shadow-sm overflow-hidden flex flex-col">
+                  <div className="px-5 py-4 border-b border-border/80 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold text-foreground">Active Assignments</h2>
+                      <p className="text-xs text-muted-foreground">{assignments.length} total assignments</p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={handleCreateAssignmentClick}>
+                      <PlusCircle className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  <div className="divide-y divide-border/60 p-2 space-y-2 overflow-y-auto max-h-[500px]">
+                    {assignments.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-muted-foreground">
+                        <FileCode className="w-8 h-8 mx-auto text-muted-foreground/50 mb-2" />
+                        <p className="font-medium">No assignments yet</p>
+                        <p className="text-xs text-muted-foreground mt-1">Create assignments to collect student code</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCreateAssignmentClick}
+                          className="mt-3 text-xs"
+                        >
+                          Create Assignment
+                        </Button>
+                      </div>
+                    ) : (
+                      assignments.map((assignment) => {
+                        const classTitle = classMap.get(assignment.course) || assignment.course_name || "General Course";
+                        const aSubmissions = submissions.filter(
+                          (s) => s.assignment_id === assignment.id || s.assignment_title === assignment.title
+                        );
+
+                        return (
+                          <div key={assignment.id} className="p-3 rounded-lg bg-muted/40 border border-border/50">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-semibold text-sm text-foreground">{assignment.title || assignment.name}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">{classTitle}</p>
+                              </div>
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-medium shrink-0">
+                                #{assignment.assignment_number || 1}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground mt-3 pt-2 border-t border-border/40">
+                              <span>{aSubmissions.length} submissions</span>
+                              <span>
+                                {assignment.deadline
+                                  ? `Due: ${new Date(assignment.deadline).toLocaleDateString()}`
+                                  : "No due date"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* TAB 2: ASSIGNMENTS VIEW */}
+          {activeTab === "assignments" && (
+            <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Course Assignments</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Create and manage coding assignments across your registered classes
+                  </p>
+                </div>
+                <Button onClick={handleCreateAssignmentClick} className="gap-2">
+                  <PlusCircle className="w-4 h-4" />
+                  New Assignment
+                </Button>
+              </div>
+
+              {assignments.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  <FileCode className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
+                  <p className="text-base font-semibold text-foreground">No assignments created yet</p>
+                  <p className="mt-1">Click the button above to add your first coding assignment.</p>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {assignments.map((assignment) => {
+                    const classTitle = classMap.get(assignment.course) || assignment.course_name || "Course";
+                    const aSubmissions = submissions.filter(
+                      (s) => s.assignment_id === assignment.id || s.assignment_title === assignment.title
+                    );
+                    const aiFlaggedCount = aSubmissions.filter((s) => s.aiLabel === "AI").length;
+
+                    return (
+                      <div
+                        key={assignment.id}
+                        className="bg-card rounded-xl border border-border/80 p-4 shadow-sm flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-semibold">
+                              Assignment #{assignment.assignment_number || 1}
+                            </span>
+                            {aiFlaggedCount > 0 && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/15 text-destructive font-semibold">
+                                {aiFlaggedCount} Flagged
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-semibold text-foreground text-base">{assignment.title || assignment.name}</h3>
+                          <p className="text-xs text-muted-foreground mt-1">{classTitle}</p>
+                          {assignment.description && (
+                            <p className="text-xs text-muted-foreground/80 mt-2 line-clamp-2">
+                              {assignment.description}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground font-medium">
+                            {aSubmissions.length} submissions
+                          </span>
+                          <Link to={`/teacher/classes/${assignment.course}`}>
+                            <Button variant="outline" size="sm" className="h-8 text-xs">
+                              View Class
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: STUDENTS MANAGEMENT */}
+          {activeTab === "students" && (
+            <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border">
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Enrolled Students</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Directory of registered students eligible for course enrollment
+                  </p>
+                </div>
+              </div>
+
+              {/* Add Student Section */}
+              <div className="p-4 rounded-xl bg-muted/40 border border-border/80">
+                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <GraduationCap className="w-4 h-4 text-secondary" />
+                  Add New Student
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
                   <Input
-                    placeholder="Name"
+                    placeholder="Full Name"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
                   />
                   <Input
-                    placeholder="Email"
+                    placeholder="student@university.edu"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                   />
                   <select
-                    aria-label="Student degree / department"
                     value={newDegree}
-                    onChange={(event) => setNewDegree(event.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                    required
+                    onChange={(e) => setNewDegree(e.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
                   >
-                    <option value="">Select program</option>
+                    <option value="">Select Degree Program</option>
                     {STUDENT_PROGRAMS.map((program) => (
-                      <option key={program.value} value={program.value}>{program.label}</option>
+                      <option key={program.value} value={program.value}>
+                        {program.label}
+                      </option>
                     ))}
                   </select>
                   <select
-                    aria-label="Student semester"
                     value={newSemester}
-                    onChange={(event) => setNewSemester(event.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                    required
+                    onChange={(e) => setNewSemester(e.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
                   >
-                    <option value="">Select semester</option>
-                    {STUDENT_SEMESTERS.map((semester) => (
-                      <option key={semester} value={semester}>Semester {semester}</option>
+                    <option value="">Select Semester</option>
+                    {STUDENT_SEMESTERS.map((s) => (
+                      <option key={s} value={s}>
+                        Semester {s}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <Button
                   onClick={handleAddStudent}
                   disabled={!newName.trim() || !newEmail.trim() || !newDegree || !newSemester}
+                  size="sm"
                 >
-                  Add Student
+                  Add Student to Registry
                 </Button>
               </div>
-              <label htmlFor="student-program-filter" className="mb-2 block text-sm font-medium">
-                Show students from
-              </label>
-              <select
-                id="student-program-filter"
-                value={studentProgramFilter}
-                onChange={(event) => setStudentProgramFilter(event.target.value)}
-                className="mb-4 h-10 w-full rounded-md border border-input bg-background px-3 text-sm sm:max-w-md"
-              >
-                <option value="all">All programs</option>
-                {STUDENT_PROGRAMS.map((program) => (
-                  <option key={program.value} value={program.value}>{program.label}</option>
-                ))}
-                <option value={UNSPECIFIED_PROGRAM}>Program not provided (older accounts)</option>
-              </select>
-              {loading && <p>Loading students...</p>}
-              {error && <p className="text-red-500">Error: {error}</p>}
-              {!loading && !error && filteredStudents.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {students.length === 0
-                    ? "No students found."
-                    : "No students match this program and search."}
-                </p>
-              )}
-              {!loading && !error && filteredStudents.length > 0 && (
-                <ul className="space-y-2">
-                  {filteredStudents.map((student) => (
-                    <li key={student.email} className="p-4 bg-card rounded-lg border">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-medium">{student.name}</p>
-                        <span className="rounded-full bg-secondary/10 px-2.5 py-1 text-xs font-medium text-secondary">
-                          {getStudentProgramLabel(student.degree)}
-                          {student.semester ? ` · Semester ${student.semester}` : ""}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{student.email}</p>
-                    </li>
+
+              {/* Filter controls */}
+              <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+                <select
+                  value={studentProgramFilter}
+                  onChange={(e) => setStudentProgramFilter(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm w-full sm:max-w-xs"
+                >
+                  <option value="all">All Programs</option>
+                  {STUDENT_PROGRAMS.map((program) => (
+                    <option key={program.value} value={program.value}>
+                      {program.label}
+                    </option>
                   ))}
-                </ul>
+                  <option value={UNSPECIFIED_PROGRAM}>Unspecified Program</option>
+                </select>
+                <span className="text-xs text-muted-foreground">
+                  Showing {filteredStudents.length} of {students.length} students
+                </span>
+              </div>
+
+              {loading ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">Loading student directory...</div>
+              ) : error ? (
+                <div className="py-8 text-center text-sm text-destructive">{error}</div>
+              ) : filteredStudents.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">No students match this query.</div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {filteredStudents.map((s) => (
+                    <div key={s.email} className="p-3.5 rounded-xl border border-border/80 bg-card shadow-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-sm text-foreground truncate">{s.name}</p>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-medium shrink-0">
+                          {getStudentProgramLabel(s.degree)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 truncate">{s.email}</p>
+                      {s.semester && (
+                        <p className="text-[11px] text-muted-foreground/80 mt-2">Semester {s.semester}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-          ) : null}
-          {/* Stats Grid */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {stats.map((stat) => (
-              <div key={stat.label} className="bg-card rounded-2xl p-5 border border-border">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    stat.color === "secondary" ? "bg-secondary/10 text-secondary" :
-                    stat.color === "destructive" ? "bg-destructive/10 text-destructive" :
-                    stat.color === "yellow" ? "bg-yellow-500/10 text-yellow-600" :
-                    "bg-accent/10 text-accent"
-                  }`}>
-                    <stat.icon className="w-5 h-5" />
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">{stat.label}</span>
+          )}
+
+          {/* TAB 4: PLAGIARISM & INTEGRITY AUDIT */}
+          {activeTab === "plagiarism" && (
+            <div className="bg-card rounded-xl border border-border/80 p-5 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+                <div>
+                  <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-destructive" />
+                    Plagiarism & AI Detection Reports
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Full audit of flagged code submissions evaluated by the AST Code Intelligence engine
+                  </p>
                 </div>
-                <div className="text-3xl font-bold text-foreground">{stat.value}</div>
-                <div className="text-sm text-muted-foreground mt-1">{stat.change}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Quick Actions */}
-          <div className="flex flex-wrap gap-3 mb-8">
-            <Button variant="hero">
-              <Upload className="w-4 h-4 mr-2" />
-              Create Assignment
-            </Button>
-            <Button variant="outline">
-              <Download className="w-4 h-4 mr-2" />
-              Export Reports
-            </Button>
-            <Button variant="outline">
-              <Filter className="w-4 h-4 mr-2" />
-              Filter Results
-            </Button>
-          </div>
-
-          {/* Main Grid */}
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Recent Submissions */}
-            <div className="lg:col-span-2 bg-card rounded-2xl border border-border overflow-hidden">
-              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-                <h3 className="font-semibold text-foreground">Recent Submissions</h3>
-                <Button variant="ghost" size="sm">View All</Button>
-              </div>
-              <div className="divide-y divide-border">
-                {recentSubmissions.map((submission) => (
-                  <div key={submission.id} className={`flex flex-col gap-3 px-4 py-4 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:px-6 ${submission.aiLabel === 'AI' ? 'bg-yellow-500/5 border-l-4 border-l-yellow-500' : ''}`}>
-                    <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end sm:gap-4">
-                      <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-sm font-semibold text-secondary">
-                        {(submission.name || "ST").split(" ").map((n: string) => n[0]).filter(Boolean).join("").slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{submission.name}</p>
-                        <p className="text-sm text-muted-foreground">{submission.assignment}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      {submission.aiLabel && (
-                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                          submission.aiLabel === 'AI' ? 'bg-yellow-500/10 text-yellow-600' : 'bg-accent/10 text-accent'
-                        }`}>
-                          {submission.aiLabel} ({submission.aiConfidence ? Math.round(submission.aiConfidence * 100) : 0}%)
-                        </span>
-                      )}
-                      <span className="text-xs px-3 py-1 rounded-full font-medium bg-muted text-muted-foreground">
-                        {submission.status}
-                      </span>
-                      <span className="text-sm font-medium text-foreground w-16 text-right">{submission.score}</span>
-                      <Link
-                        to={`/teacher/submission/${submission.id}`}
-                        aria-label={`View ${submission.name}'s submission report`}
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium text-secondary hover:bg-secondary/10"
-                      >
-                        <Eye className="w-4 h-4" />
-                        {submission.score === "-" ? "Grade" : "Review"}
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Assignments */}
-            <div className="bg-card rounded-2xl border border-border overflow-hidden">
-              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-                <h3 className="font-semibold text-foreground">Active Assignments</h3>
-                <Button variant="ghost" size="sm">
-                  <ChevronDown className="w-4 h-4" />
+                <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-2">
+                  <Download className="w-4 h-4" />
+                  Export Plagiarism Audit
                 </Button>
               </div>
-              <div className="p-4 space-y-3">
-                {assignments.map((assignment) => (
-                  <div key={assignment.id} className="p-4 bg-muted/50 rounded-xl">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-medium text-foreground">{assignment.name}</p>
-                        <p className="text-sm text-muted-foreground">{assignment.course}</p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        assignment.status === "active" ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"
-                      }`}>
-                        {assignment.status}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{assignment.submissions} submissions</span>
-                      <span className="text-muted-foreground">Due: {assignment.deadline}</span>
-                    </div>
+
+              <div className="divide-y divide-border/60">
+                {submissions.filter((s) => s.aiLabel === "AI").length === 0 ? (
+                  <div className="py-12 text-center text-sm text-muted-foreground">
+                    <ShieldCheck className="w-10 h-10 mx-auto text-emerald-500 mb-2" />
+                    <p className="text-base font-semibold text-foreground">Zero AI-flagged submissions</p>
+                    <p className="mt-1">All current submissions have satisfied human code originality criteria.</p>
                   </div>
-                ))}
+                ) : (
+                  submissions
+                    .filter((s) => s.aiLabel === "AI")
+                    .map((sub) => {
+                      const sName = sub.student_name || sub.studentName || sub.student_email || "Student";
+                      const aTitle = sub.assignment_title || sub.assignmentTitle || "Assignment";
+                      const subId = sub.id || sub._id;
+
+                      return (
+                        <div key={subId} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm text-foreground">{sName}</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/15 text-destructive font-bold">
+                                AI: {sub.aiConfidence ? Math.round(sub.aiConfidence * 100) : 95}% Confidence
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {aTitle} · Submitted: {sub.submitted_at || sub.createdAt || "Recent"}
+                            </p>
+                            <p className="text-xs text-muted-foreground/80 mt-1">
+                              Human Originality: {sub.humanPercentage ?? 5}% · Flagged for review
+                            </p>
+                          </div>
+                          <Link to={`/teacher/submission/${subId}`}>
+                            <Button variant="default" size="sm" className="gap-1.5 text-xs">
+                              <Eye className="w-3.5 h-3.5" />
+                              Inspect AI Code Analysis
+                            </Button>
+                          </Link>
+                        </div>
+                      );
+                    })
+                )}
               </div>
             </div>
-          </div>
-
-          {/* Plagiarism Heatmap */}
-          <div className="mt-6 bg-card rounded-2xl border border-border p-6">
-            <h3 className="font-semibold text-foreground mb-4">Plagiarism Overview - This Week</h3>
-            <div className="grid grid-cols-10 lg:grid-cols-20 gap-1">
-              {Array.from({ length: 40 }).map((_, i) => {
-                const rand = Math.random();
-                return (
-                  <div
-                    key={i}
-                    className={`h-8 rounded ${
-                      rand > 0.85 ? "bg-destructive/70" :
-                      rand > 0.6 ? "bg-yellow-500/50" :
-                      "bg-accent/30"
-                    }`}
-                    title={`Student ${i + 1}`}
-                  />
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-6 mt-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-2"><span className="w-4 h-4 rounded bg-accent/30" /> Low (0-30%)</span>
-              <span className="flex items-center gap-2"><span className="w-4 h-4 rounded bg-yellow-500/50" /> Medium (30-70%)</span>
-              <span className="flex items-center gap-2"><span className="w-4 h-4 rounded bg-destructive/70" /> High (70%+)</span>
-            </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

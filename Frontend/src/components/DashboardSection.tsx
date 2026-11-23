@@ -93,26 +93,35 @@ const DashboardSection = () => {
 
                 {/* Plagiarism Heatmap Preview */}
                 <div className="grid lg:grid-cols-2 gap-6">
-                  <div className="bg-muted/30 rounded-xl p-5 border border-border">
-                    <h4 className="font-semibold text-foreground mb-4">Plagiarism Heatmap</h4>
-                    <div className="grid grid-cols-10 gap-1">
-                      {Array.from({ length: 50 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`h-6 rounded ${
-                            Math.random() > 0.7
-                              ? "bg-destructive/60"
-                              : Math.random() > 0.4
-                              ? "bg-yellow-500/40"
-                              : "bg-accent/30"
-                          }`}
-                        />
-                      ))}
+                  <div className="bg-muted/30 rounded-xl p-5 border border-border flex flex-col justify-between">
+                    <div>
+                      <h4 className="font-semibold text-foreground mb-1">Code Originality & AI Detection</h4>
+                      <p className="text-xs text-muted-foreground mb-4">AST syntactic & stylometric analysis across active submissions</p>
+                      
+                      <div className="space-y-3">
+                        <div className="w-full h-3 rounded-full bg-muted flex overflow-hidden">
+                          <div style={{ width: "88%" }} className="bg-emerald-500" title="Human Written: 88%" />
+                          <div style={{ width: "12%" }} className="bg-destructive" title="AI Flagged: 12%" />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 pt-2">
+                          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Human Verified</span>
+                            <div className="text-xl font-bold text-foreground mt-0.5">88%</div>
+                            <span className="text-[11px] text-muted-foreground">Original student syntax</span>
+                          </div>
+                          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                            <span className="text-xs font-semibold text-destructive">AI Flagged</span>
+                            <div className="text-xl font-bold text-foreground mt-0.5">12%</div>
+                            <span className="text-[11px] text-muted-foreground">Requires manual review</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-accent/30" /> Low</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-500/40" /> Medium</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-destructive/60" /> High</span>
+
+                    <div className="flex items-center justify-between pt-4 mt-4 border-t border-border/50 text-xs text-muted-foreground">
+                      <span>Model confidence: 95.0%</span>
+                      <span className="text-emerald-500 font-medium">0% False Positives</span>
                     </div>
                   </div>
 
