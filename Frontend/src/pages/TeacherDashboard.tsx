@@ -59,7 +59,7 @@ const TeacherDashboard = () => {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const [activeTab, setActiveTab] = useState("students");
+  const [activeTab, setActiveTab] = useState("overview");
   const [students, setStudents] = useState<Student[]>([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -165,29 +165,39 @@ const TeacherDashboard = () => {
     return matchesProgram && matchesSearch;
   });
 
-  const totalSubmissions = submissions.length;
-  const pendingReview = submissions.filter(s => s.score === null || s.score === undefined).length;
-  const averageScore = submissions.filter(s => s.score !== null).length > 0 
-    ? Math.round(submissions.filter(s => s.score !== null).reduce((sum, s) => sum + s.score, 0) / submissions.filter(s => s.score !== null).length)
+  const totalSubmissions = (submissions || []).length;
+  const pendingReview = (submissions || []).filter(s => s.score === null || s.score === undefined).length;
+  const gradedSubmissions = (submissions || []).filter(s => typeof s.score === "number" && !isNaN(s.score));
+  const averageScore = gradedSubmissions.length > 0 
+    ? Math.round(gradedSubmissions.reduce((sum, s) => sum + s.score, 0) / gradedSubmissions.length)
     : 0;
 
   const stats = [
     { icon: FileCode, label: "Total Submissions", value: totalSubmissions.toString(), change: "", color: "secondary" },
-    { icon: AlertTriangle, label: "AI-labeled", value: submissions.filter(s => s.aiLabel === 'AI').length.toString(), change: "", color: "destructive" },
+    { icon: AlertTriangle, label: "AI-labeled", value: (submissions || []).filter(s => s.aiLabel === 'AI').length.toString(), change: "", color: "destructive" },
     { icon: Clock, label: "Pending Review", value: pendingReview.toString(), change: "", color: "yellow" },
-    { icon: TrendingUp, label: "Average Score", value: `${averageScore}%`, change: "", color: "accent" },
+    { icon: TrendingUp, label: "Average Score", value: gradedSubmissions.length > 0 ? `${averageScore}%` : "—", change: "", color: "accent" },
   ];
 
-  const recentSubmissions = submissions.slice(0, 5).map((sub) => ({
-    id: sub._id,
-    name: sub.studentName,
-    assignment: sub.assignmentTitle,
-    status: sub.status,
-    score: sub.score !== null && sub.score !== undefined ? `${sub.score}/100` : "-",
-    time: sub.createdAt ? new Date(sub.createdAt).toLocaleString() : "Unknown",
-    aiLabel: sub.aiLabel || null,
-    aiConfidence: sub.aiConfidence || null
-  }));
+  const recentSubmissions = (submissions || []).slice(0, 5).map((sub: any) => {
+    const studentName = sub.student_name || sub.studentName || sub.student_email || "Student";
+    const assignmentTitle = sub.assignment_title || sub.assignmentTitle || "Assignment";
+    const status = sub.status || "Submitted";
+    const score = sub.score !== null && sub.score !== undefined ? `${sub.score}/100` : "-";
+    const time = sub.submitted_at || sub.createdAt ? new Date(sub.submitted_at || sub.createdAt).toLocaleString() : "Just now";
+    return {
+      id: sub._id || sub.id,
+      name: studentName,
+      assignment: assignmentTitle,
+      status,
+      score,
+      time,
+      aiLabel: sub.aiLabel || null,
+      aiConfidence: sub.aiConfidence || null,
+      aiPercentage: sub.aiPercentage ?? null,
+      humanPercentage: sub.humanPercentage ?? null,
+    };
+  });
 
   const assignments = [];
 
@@ -442,7 +452,7 @@ const TeacherDashboard = () => {
                   <div key={submission.id} className={`flex flex-col gap-3 px-4 py-4 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:px-6 ${submission.aiLabel === 'AI' ? 'bg-yellow-500/5 border-l-4 border-l-yellow-500' : ''}`}>
                     <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end sm:gap-4">
                       <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-sm font-semibold text-secondary">
-                        {submission.name.split(" ").map(n => n[0]).join("")}
+                        {(submission.name || "ST").split(" ").map((n: string) => n[0]).filter(Boolean).join("").slice(0, 2).toUpperCase()}
                       </div>
                       <div>
                         <p className="font-medium text-foreground">{submission.name}</p>
