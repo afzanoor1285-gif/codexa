@@ -4,11 +4,27 @@ import tokenize
 import pandas as pd
 
 
+def sanitize_code(source: str) -> str:
+    """Normalize JS-style '//' comment headers to '#' so Python tokenizer and AST don't error."""
+    if not isinstance(source, str):
+        return ""
+    lines = source.splitlines()
+    cleaned = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("//"):
+            cleaned.append("# " + stripped[2:].strip())
+        else:
+            cleaned.append(line)
+    return "\n".join(cleaned)
+
+
 def strip_comments_and_docstrings(source: str) -> str:
     """
     Remove comments and docstrings from Python source code so the model
     evaluates underlying code semantics and structure rather than English comments.
     """
+    source = sanitize_code(source)
     try:
         io_obj = io.StringIO(source)
         out = ""
@@ -46,6 +62,7 @@ def extract_features(code: str) -> pd.Series:
     Extract high-precision AST structural, stylistic, and semantic features
     specifically designed to distinguish modern AI generation patterns from human students.
     """
+    code = sanitize_code(code)
     lines = code.split("\n")
     total_lines = max(len(lines), 1)
     non_blank_lines = [l for l in lines if l.strip()]

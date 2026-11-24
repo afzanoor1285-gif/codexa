@@ -78,6 +78,17 @@ const SubmitAssignment = () => {
   }, [assignmentId]);
 
   const readFilesContent = async (fileList: File[]) => {
+    if (fileList.length === 1) {
+      const content = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = (e) => reject(e);
+        reader.readAsText(fileList[0]);
+      });
+      setCode(content);
+      return;
+    }
+
     const contents: string[] = [];
     for (const file of fileList) {
       const content = await new Promise<string>((resolve, reject) => {
@@ -86,9 +97,10 @@ const SubmitAssignment = () => {
         reader.onerror = (e) => reject(e);
         reader.readAsText(file);
       });
-      contents.push(`// ${file.name}\n${content}`);
+      const commentPrefix = file.name.endsWith(".py") ? "#" : "//";
+      contents.push(`${commentPrefix} ${file.name}\n${content}`);
     }
-    setCode(contents.join('\n\n'));
+    setCode(contents.join("\n\n"));
   };
 
   const handleDrag = (e: React.DragEvent) => {

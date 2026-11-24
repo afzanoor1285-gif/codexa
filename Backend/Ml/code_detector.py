@@ -5,7 +5,11 @@ from pathlib import Path
 import joblib
 from scipy.sparse import csr_matrix, hstack
 
-from .feature_extractor import extract_features, strip_comments_and_docstrings
+from .feature_extractor import (
+    extract_features,
+    strip_comments_and_docstrings,
+    sanitize_code,
+)
 
 logger = logging.getLogger(__name__)
 MODEL_DIRECTORY = Path(__file__).parent / "models"
@@ -42,6 +46,7 @@ def is_model_loaded():
 
 
 def code_to_ast_sequence(code: str) -> str:
+    code = sanitize_code(code)
     try:
         tree = ast.parse(str(code))
         return " ".join(type(node).__name__ for node in ast.walk(tree))
