@@ -127,26 +127,28 @@ def analyze_code(code):
     # Dual-Head Calibration:
     if structural_score >= 0.75:
         # Overwhelming structural AI signature (typed + docstring + descriptive identifiers)
-        calibrated_prob = max(raw_ai_prob, 0.82 + 0.15 * structural_score)
+        calibrated_prob = max(raw_ai_prob, 0.85 + 0.12 * structural_score)
     elif structural_score <= 0.10:
         # Strong human student signature (no type hints, no docstrings, short/single char variables)
-        calibrated_prob = min(raw_ai_prob, 0.30)
+        calibrated_prob = min(raw_ai_prob, 0.25)
+    elif raw_ai_prob >= 0.65 and structural_score >= 0.30:
+        # Untyped ChatGPT code (clean docstring, descriptive multiword vars, defensive validation)
+        calibrated_prob = max(raw_ai_prob, 0.75 + 0.20 * structural_score)
     else:
-        calibrated_prob = 0.55 * raw_ai_prob + 0.45 * structural_score
+        calibrated_prob = 0.60 * raw_ai_prob + 0.40 * structural_score
 
     calibrated_prob = max(min(calibrated_prob, 0.999), 0.001)
 
-    if calibrated_prob >= 0.70:
+    if calibrated_prob >= 0.50:
         label = "AI"
         confidence = round(calibrated_prob, 4)
         ai_percentage = round(calibrated_prob * 100, 2)
-        human_percentage = round((1 - calibrated_prob) * 100, 2)
+        human_percentage = round((1.0 - calibrated_prob) * 100, 2)
     else:
         label = "Human"
-        human_conf = round(1.0 - (calibrated_prob / 0.70) * 0.45, 4)
-        confidence = min(max(human_conf, 0.50), 0.99)
-        ai_percentage = round((calibrated_prob / 0.70) * 45, 2)
-        human_percentage = round(100.0 - ai_percentage, 2)
+        confidence = round(1.0 - calibrated_prob, 4)
+        ai_percentage = round(calibrated_prob * 100, 2)
+        human_percentage = round((1.0 - calibrated_prob) * 100, 2)
 
     return {
         "aiLabel": label,
